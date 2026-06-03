@@ -44,6 +44,12 @@ npm run dashboard
 npm run worker:once
 ```
 
+归档当前账本并开启新的模拟盘周期：
+
+```powershell
+npm run cycle:reset
+```
+
 打开 dashboard：
 
 ```text
@@ -181,6 +187,24 @@ npm run typecheck
 - 同一个市场在 `MARKET_COOLDOWN_MS` 内不重复追买。
 - 单个 token/市场敞口超过 `MAX_ASSET_EXPOSURE_USDC` 后不再继续买入。
 - dashboard 会显示信号评分和拒绝原因，便于复盘。
+
+## 开新模拟盘周期
+
+如果历史模拟盘已经被旧策略污染，可以开启新周期：
+
+```powershell
+npm run cycle:reset
+```
+
+这个命令会：
+
+- 把当前 `data/state.json` 归档到 `data/archives/`。
+- 清空 signals、orders、risk 和 simulation。
+- 重置模拟盘初始资金为 `SIM_INITIAL_CASH_USDC`。
+- 写入新的 `cycleStartedAt`。
+- worker 只接收周期开始之后的目标钱包 activity。
+
+`data/` 已被 `.gitignore` 忽略，归档账本不会提交到 GitHub。
 
 ## GitHub 提交安全清单
 

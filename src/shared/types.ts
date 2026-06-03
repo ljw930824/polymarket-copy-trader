@@ -208,6 +208,7 @@ export interface RiskState {
 
 export interface AppState {
   updatedAt: number;
+  cycleStartedAt: number;
   mode: CopyMode;
   walletScores: WalletScore[];
   targetPositions: Position[];

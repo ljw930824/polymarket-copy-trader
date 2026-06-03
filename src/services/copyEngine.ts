@@ -13,7 +13,12 @@ export class CopyEngine {
     for (const id of signalIds) this.seen.add(id);
   }
 
-  signalsFromActivities(config: AppConfig, wallets: WalletScore[], events: ActivityEvent[]): CopySignal[] {
+  signalsFromActivities(
+    config: AppConfig,
+    wallets: WalletScore[],
+    events: ActivityEvent[],
+    minSourceTimestamp = 0
+  ): CopySignal[] {
     const weights = walletWeights(wallets);
     const now = Date.now();
     const signals: CopySignal[] = [];
@@ -23,6 +28,7 @@ export class CopyEngine {
       if (this.seen.has(id)) continue;
       this.seen.add(id);
       const sourceTimestamp = normalizeTimestamp(event.timestamp);
+      if (sourceTimestamp < minSourceTimestamp) continue;
       if (now - sourceTimestamp > config.signalStaleMs) continue;
       const walletWeight = weights.get(event.proxyWallet.toLowerCase()) ?? 0;
       if (walletWeight <= 0) continue;

@@ -35,6 +35,7 @@ export function createSimulationState(initialCash = 0): SimulationState {
 export function createEmptyState(mode: CopyMode): AppState {
   return {
     updatedAt: Date.now(),
+    cycleStartedAt: Date.now(),
     mode,
     walletScores: [],
     targetPositions: [],

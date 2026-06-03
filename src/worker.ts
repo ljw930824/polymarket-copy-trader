@@ -26,6 +26,7 @@ async function main(): Promise<void> {
   const marketWs = new MarketWsCache(config.marketWsUrl);
   let state: AppState = await store.read(config.mode);
   state = { ...createEmptyState(config.mode), ...state, mode: config.mode };
+  state.cycleStartedAt = state.cycleStartedAt ?? Date.now();
   const engine = new CopyEngine(state.signals.map((signal) => signal.id));
   state.simulation = ensureSimulation(state.simulation, config.simInitialCashUsdc);
   if (state.simulation.trades.length === 0 && state.orders.length > 0 && state.signals.length > 0) {
@@ -67,7 +68,7 @@ async function main(): Promise<void> {
       }
 
       const events = await loadActivity(dataApi, state.walletScores.map((wallet) => wallet.wallet), config.activityLimit);
-      const signals = engine.signalsFromActivities(config, state.walletScores, events);
+      const signals = engine.signalsFromActivities(config, state.walletScores, events, state.cycleStartedAt);
       for (const signal of signals) {
         const quote = marketWs.getQuote(signal.asset);
         let planned = executor.toOrder(signal, quote);

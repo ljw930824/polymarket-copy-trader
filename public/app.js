@@ -67,6 +67,7 @@ function renderMetrics(state) {
     metric("跟踪钱包", state.walletScores?.length ?? 0),
     metric("信号数量", state.signals?.length ?? 0),
     metric("订单数量", state.orders?.length ?? 0),
+    metric("周期开始", state.cycleStartedAt ? new Date(state.cycleStartedAt).toLocaleTimeString() : "-"),
     metric("今日名义金额", usd.format(state.risk?.notionalUsdc ?? 0)),
     metric("模拟权益", usd.format(state.simulation?.totalEquity ?? 0)),
     metric("模拟盈亏", signedUsd(simPnl), pnlClass(simPnl)),

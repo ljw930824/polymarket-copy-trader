@@ -7,6 +7,7 @@
     "dev": "concurrently -k -n worker,dashboard \"npm:worker\" \"npm:dashboard\"",
     "worker": "tsx src/worker.ts",
     "worker:once": "cross-env WORKER_RUN_ONCE=1 tsx src/worker.ts",
+    "cycle:reset": "tsx src/resetCycle.ts",
     "dashboard": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
