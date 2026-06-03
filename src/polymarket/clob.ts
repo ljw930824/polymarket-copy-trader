@@ -5,6 +5,10 @@ export class OrderExecutor {
 
   async execute(signal: CopySignal, quote?: MarketQuote): Promise<CopyOrder> {
     const order = this.toOrder(signal, quote);
+    return this.executeOrder(order);
+  }
+
+  async executeOrder(order: CopyOrder): Promise<CopyOrder> {
     if (order.status === "skipped") return order;
     if (this.config.mode === "paper") {
       return { ...order, status: "filled", response: { paper: true } };

@@ -63,6 +63,13 @@ COPY_TOTAL_BUDGET_USDC=100
 POLL_INTERVAL_MS=1500
 ACTIVITY_LIMIT=25
 SIGNAL_STALE_MS=120000
+MAX_SIGNAL_API_DELAY_MS=30000
+MAX_ASSET_EXPOSURE_USDC=20
+MARKET_COOLDOWN_MS=30000
+MIN_COPY_PRICE=0.05
+MAX_COPY_PRICE=0.85
+MIN_SIGNAL_SCORE=60
+EXCLUDE_SPORTS_MARKETS=true
 SIM_INITIAL_CASH_USDC=100
 MAX_SLIPPAGE_BPS=250
 MAX_SINGLE_ORDER_USDC=15
@@ -78,6 +85,12 @@ MAX_DAILY_NOTIONAL_USDC=500
 - `COPY_TOTAL_BUDGET_USDC`：跟单总预算。
 - `POLL_INTERVAL_MS`：公开 activity 轮询间隔。
 - `SIGNAL_STALE_MS`：信号最大可接受陈旧时间。
+- `MAX_SIGNAL_API_DELAY_MS`：公开 API 延迟超过该值的信号不执行。
+- `MAX_ASSET_EXPOSURE_USDC`：单个 token/市场最大模拟敞口。
+- `MARKET_COOLDOWN_MS`：同一市场连续 BUY 的冷却时间。
+- `MIN_COPY_PRICE` / `MAX_COPY_PRICE`：BUY 价格过滤，避免追太低或太高的赔率。
+- `MIN_SIGNAL_SCORE`：信号评分低于该值则跳过。
+- `EXCLUDE_SPORTS_MARKETS`：默认排除体育、电竞、临场高波动市场。
 - `SIM_INITIAL_CASH_USDC`：模拟盘初始资金。
 - `MAX_SLIPPAGE_BPS`：最大滑点，250 表示 2.5%。
 - `MAX_SINGLE_ORDER_USDC`：单笔最大跟单金额。
@@ -157,6 +170,17 @@ npm run typecheck
 - 跟单信号去重。
 - 模拟盘买入、部分卖出、已实现盈亏、未实现盈亏、ROI、最大回撤。
 - 无持仓卖出不会产生负仓位。
+
+## 策略风控
+
+当前执行前会做一轮信号评分和订单过滤：
+
+- 排除体育、电竞、临场盘，避免公开 API 延迟导致追高。
+- 如果公开 API 延迟超过 `MAX_SIGNAL_API_DELAY_MS`，跳过。
+- 如果 BUY 价格高于 `MAX_COPY_PRICE` 或低于 `MIN_COPY_PRICE`，跳过。
+- 同一个市场在 `MARKET_COOLDOWN_MS` 内不重复追买。
+- 单个 token/市场敞口超过 `MAX_ASSET_EXPOSURE_USDC` 后不再继续买入。
+- dashboard 会显示信号评分和拒绝原因，便于复盘。
 
 ## GitHub 提交安全清单
 

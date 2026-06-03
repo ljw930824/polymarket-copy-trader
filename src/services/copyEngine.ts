@@ -1,5 +1,6 @@
 import type { ActivityEvent, AppConfig, CopySignal, RiskState, WalletScore } from "../shared/types.js";
 import { walletWeights } from "./scoring.js";
+import { scoreSignal } from "./strategyGuards.js";
 
 export class CopyEngine {
   private readonly seen: Set<string>;
@@ -25,6 +26,8 @@ export class CopyEngine {
       if (now - sourceTimestamp > config.signalStaleMs) continue;
       const walletWeight = weights.get(event.proxyWallet.toLowerCase()) ?? 0;
       if (walletWeight <= 0) continue;
+      const apiDelayMs = now - sourceTimestamp;
+      const quality = scoreSignal(config, event, apiDelayMs);
       const sourceUsdcSize = event.usdcSize ?? event.size * event.price;
       const targetUsdcAmount = Math.min(config.maxSingleOrderUsdc, sourceUsdcSize * walletWeight);
       const targetShareAmount = event.price > 0 ? targetUsdcAmount / event.price : 0;
@@ -44,7 +47,11 @@ export class CopyEngine {
         targetUsdcAmount,
         targetShareAmount,
         walletWeight,
-        reason: "target wallet trade"
+        reason: "target wallet trade",
+        apiDelayMs,
+        signalScore: quality.score,
+        rejectReasons: quality.rejectReasons,
+        tags: quality.tags
       });
     }
     return signals.sort((a, b) => a.sourceTimestamp - b.sourceTimestamp);

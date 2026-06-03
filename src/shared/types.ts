@@ -21,6 +21,13 @@ export interface AppConfig {
   maxDailyNotionalUsdc: number;
   maxSlippageBps: number;
   signalStaleMs: number;
+  maxSignalApiDelayMs: number;
+  maxAssetExposureUsdc: number;
+  marketCooldownMs: number;
+  minCopyPrice: number;
+  maxCopyPrice: number;
+  minSignalScore: number;
+  excludeSportsMarkets: boolean;
   simInitialCashUsdc: number;
   workerRunOnce: boolean;
   privateKey?: `0x${string}`;
@@ -125,6 +132,10 @@ export interface CopySignal {
   targetShareAmount: number;
   walletWeight: number;
   reason: string;
+  apiDelayMs: number;
+  signalScore: number;
+  rejectReasons: string[];
+  tags: string[];
 }
 
 export interface CopyOrder {

@@ -22,6 +22,13 @@ const config = {
   maxDailyNotionalUsdc: 500,
   maxSlippageBps: 250,
   signalStaleMs: 120000,
+  maxSignalApiDelayMs: 30000,
+  maxAssetExposureUsdc: 20,
+  marketCooldownMs: 30000,
+  minCopyPrice: 0.05,
+  maxCopyPrice: 0.85,
+  minSignalScore: 60,
+  excludeSportsMarkets: true,
   simInitialCashUsdc: 100,
   workerRunOnce: false,
   polySignatureType: 3

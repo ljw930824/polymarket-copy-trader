@@ -62,7 +62,11 @@ function signal(id: string, side: "BUY" | "SELL", asset: string, price: number, 
     targetUsdcAmount: size * price,
     targetShareAmount: size,
     walletWeight: 1,
-    reason: "test"
+    reason: "test",
+    apiDelayMs: 0,
+    signalScore: 100,
+    rejectReasons: [],
+    tags: []
   };
 }
 

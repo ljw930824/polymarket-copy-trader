@@ -142,14 +142,16 @@ function renderPositions(positions) {
 function renderSignals(signals) {
   table(
     "signals",
-    ["发现时间", "方向", "来源钱包", "市场", "目标金额", "公开 API 延迟"],
+    ["发现时间", "方向", "评分", "来源钱包", "市场", "目标金额", "公开 API 延迟", "拒绝原因"],
     signals.slice(0, 50).map((signal) => [
       new Date(signal.detectedAt).toLocaleTimeString(),
       sidePill(signal.side),
+      scorePill(signal.signalScore ?? 0),
       short(signal.sourceWallet),
       text(signal.title ?? shortText(signal.asset)),
       usd.format(signal.targetUsdcAmount),
-      `${formatter.format((signal.detectedAt - signal.sourceTimestamp) / 1000)} 秒`
+      `${formatter.format((signal.detectedAt - signal.sourceTimestamp) / 1000)} 秒`,
+      text((signal.rejectReasons ?? []).join("; "))
     ])
   );
 }
@@ -157,14 +159,15 @@ function renderSignals(signals) {
 function renderOrders(orders) {
   table(
     "orders",
-    ["时间", "方向", "Token", "数量/金额", "最差价格", "状态"],
+    ["时间", "方向", "Token", "数量/金额", "最差价格", "状态", "说明"],
     orders.slice(0, 50).map((order) => [
       new Date(order.createdAt).toLocaleTimeString(),
       sidePill(order.side),
       short(order.asset),
       formatter.format(order.amount),
       formatter.format(order.worstPrice),
-      statusPill(order.status)
+      statusPill(order.status),
+      text(order.error ?? "")
     ])
   );
 }
@@ -192,6 +195,11 @@ function sidePill(side) {
 function statusPill(status) {
   const value = escapeHtml(String(status ?? "-"));
   return `<span class="pill pill-${value}">${value}</span>`;
+}
+
+function scorePill(score) {
+  const className = score >= 80 ? "pill-filled" : score >= 60 ? "pill-partial" : "pill-failed";
+  return `<span class="pill ${className}">${formatter.format(score)}</span>`;
 }
 
 function colorMoney(value) {

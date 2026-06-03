@@ -14,6 +14,7 @@ import {
   markSimulation,
   rebuildSimulationFromHistory
 } from "./services/simulator.js";
+import { prepareOrderWithStrategyGuards } from "./services/strategyGuards.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
@@ -69,10 +70,11 @@ async function main(): Promise<void> {
       const signals = engine.signalsFromActivities(config, state.walletScores, events);
       for (const signal of signals) {
         const quote = marketWs.getQuote(signal.asset);
-        const planned = executor.toOrder(signal, quote);
+        let planned = executor.toOrder(signal, quote);
+        planned = prepareOrderWithStrategyGuards(config, signal, planned, state.simulation);
         const notional = signal.side === "BUY" ? planned.amount : planned.amount * planned.worstPrice;
         const risk = canSubmitOrder(state.risk, config, notional);
-        const order = risk.ok ? await executor.execute(signal, quote) : { ...planned, status: "skipped" as const, error: risk.reason };
+        const order = risk.ok ? await executor.executeOrder(planned) : { ...planned, status: "skipped" as const, error: risk.reason };
         state.signals = [signal, ...state.signals].slice(0, 200);
         state.orders = [order, ...state.orders].slice(0, 200);
         state.simulation = applyPaperOrder(state.simulation, order, signal);
