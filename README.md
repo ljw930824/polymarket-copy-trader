@@ -15,14 +15,6 @@
 - dashboard 使用 tab 区分总览、信号与订单、模拟盘、钱包与持仓。
 - 所有状态写入本地 `data/state.json`，不会上传到仓库。
 
-## 项目位置
-
-本机默认目录：
-
-```text
-C:\path\polymarket
-```
-
 ## 安装
 
 ```powershell
