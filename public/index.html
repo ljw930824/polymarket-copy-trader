@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Polymarket 跟单控制台</title>
+    <link rel="stylesheet" href="/styles.css?v=4" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero" id="mode-card">
+        <div>
+          <p class="eyebrow">Polymarket Copy Trader</p>
+          <h1>跟单控制台</h1>
+          <p id="status" class="status">正在加载本地状态...</p>
+        </div>
+        <div class="mode-stack">
+          <div class="mode-label">当前模式</div>
+          <div class="mode" id="mode">paper</div>
+        </div>
+      </header>
+
+      <nav class="tabs" aria-label="Dashboard tabs">
+        <button class="tab active" data-tab="overview">总览</button>
+        <button class="tab" data-tab="signals">信号与订单</button>
+        <button class="tab" data-tab="simulation">模拟盘</button>
+        <button class="tab" data-tab="wallets">钱包与持仓</button>
+      </nav>
+
+      <section class="tab-panel active" id="tab-overview">
+        <section class="explain overview-tone">
+          <div>
+            <h2>总览</h2>
+            <p>这里看系统是否在动、当前是 paper 还是 live、以及模拟盘整体收益。红色 live 才代表真实下单；蓝色 paper 只是模拟。</p>
+          </div>
+        </section>
+        <section class="grid metrics" id="metrics"></section>
+      </section>
+
+      <section class="tab-panel" id="tab-signals">
+        <section class="explain signal-tone">
+          <div>
+            <h2>信号与订单</h2>
+            <p>橙色区域表示“跟单信号流”。公开 API 延迟指目标钱包成交时间到本地第一次从 activity 接口看到它的时间；它通常高于本机 1.5 秒轮询间隔。</p>
+          </div>
+        </section>
+        <section class="grid two">
+          <article class="signal-card">
+            <div class="section-head">
+              <h2>信号流水</h2>
+              <span>目标钱包 BUY/SELL 被发现的记录</span>
+            </div>
+            <div id="signals" class="table"></div>
+          </article>
+          <article class="signal-card">
+            <div class="section-head">
+              <h2>订单流水</h2>
+              <span>paper 会模拟成交，live 会提交真实 FAK 订单</span>
+            </div>
+            <div id="orders" class="table"></div>
+          </article>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="tab-simulation">
+        <section class="explain sim-tone">
+          <div>
+            <h2>模拟盘</h2>
+            <p>蓝色区域是模拟账户账本。它会用 paper 跟单产生的买卖记录计算现金、持仓、已实现盈亏、未实现盈亏、ROI 和最大回撤。</p>
+          </div>
+        </section>
+        <section class="grid two">
+          <article class="sim-card">
+            <div class="section-head">
+              <h2>模拟持仓</h2>
+              <span>当前模拟账户还持有的 token</span>
+            </div>
+            <div id="sim-positions" class="table"></div>
+          </article>
+          <article class="sim-card">
+            <div class="section-head">
+              <h2>模拟成交</h2>
+              <span>模拟买入、卖出、跳过原因和已实现盈亏</span>
+            </div>
+            <div id="sim-trades" class="table"></div>
+          </article>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="tab-wallets">
+        <section class="explain wallet-tone">
+          <div>
+            <h2>钱包与目标持仓</h2>
+            <p>绿色区域是策略输入。Top 钱包根据 PnL、ROI、成交量和当前持仓评分；目标持仓按 top 钱包仓位比例映射到你的本地预算。</p>
+          </div>
+        </section>
+        <section class="grid two">
+          <article class="wallet-card">
+            <div class="section-head">
+              <h2>Top 钱包</h2>
+              <span>当前被跟踪的钱包候选</span>
+            </div>
+            <div id="wallets" class="table"></div>
+          </article>
+          <article class="wallet-card">
+            <div class="section-head">
+              <h2>目标持仓</h2>
+              <span>按 top 钱包比例换算出的本地目标仓位</span>
+            </div>
+            <div id="positions" class="table"></div>
+          </article>
+        </section>
+      </section>
+    </main>
+    <script src="/app.js?v=4"></script>
+  </body>
+</html>
