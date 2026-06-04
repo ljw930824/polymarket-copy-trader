@@ -94,6 +94,9 @@ MAKER_SIM_TOP_N=8
 MAKER_SIM_MAX_MARKET_EXPOSURE_USDC=50
 MAKER_SIM_REWARD_CAPTURE_RATE=0.02
 MAKER_SIM_FILL_THRESHOLD_BPS=25
+STRATEGY_MIN_SCORE=55
+STRATEGY_MAX_CATALYST_RISK=55
+STRATEGY_MAX_INVENTORY_RISK=70
 
 SIM_INITIAL_CASH_USDC=100
 ```
@@ -112,6 +115,39 @@ SIM_INITIAL_CASH_USDC=100
 - `MAKER_SIM_MAX_MARKET_EXPOSURE_USDC`：单个 outcome token 最大库存敞口。
 - `MAKER_SIM_REWARD_CAPTURE_RATE`：预计能捕获的官方日奖励比例。默认 2%，因为真实奖励会和其他 LP 竞争。
 - `MAKER_SIM_FILL_THRESHOLD_BPS`：中间价穿越被动 bid/ask 多少 bps 后，模拟成交。
+- `STRATEGY_MIN_SCORE`：综合策略分低于该值的候选不进入做市回测。
+- `STRATEGY_MAX_CATALYST_RISK`：催化/事件风险超过该值的候选不进入做市回测。
+- `STRATEGY_MAX_INVENTORY_RISK`：库存风险超过该值的候选不进入做市回测。
+
+综合策略评分：
+
+```text
+StrategyScore =
+  rewardYield
++ spreadYield
++ rebatePotential
++ holdingRewardPotential
+- inventoryRisk
+- catalystRisk
+- liquidityRisk
+- competitionRisk
+```
+
+收益侧含义：
+
+- `rewardYield`：官方 liquidity rewards 的可捕获收益，按 `MAKER_SIM_REWARD_CAPTURE_RATE` 保守估算。
+- `spreadYield`：当前盘口价差带来的被动成交收益空间。
+- `rebatePotential`：maker rebate 潜力，来自有 fees/rebates 的 maker 结构和市场奖励规模的近似估计。
+- `holdingRewardPotential`：长期慢变量市场可能叠加 holding rewards 的潜力。
+
+风险侧含义：
+
+- `inventoryRisk`：mid 远离 0.5、最小挂单过大导致的库存风险。
+- `catalystRisk`：临近事件、新闻、体育、短期结算导致的价格跳变风险。
+- `liquidityRisk`：缺盘口、min size 过高带来的流动性风险。
+- `competitionRisk`：价差极窄或奖励过高时，其他 LP 竞争激烈导致奖励捕获率下降。
+
+做市回测只使用 `eligible=true` 的候选；被过滤的候选仍会在 dashboard 展示原因，方便复盘。
 
 做市评分考虑：
 

@@ -61,6 +61,7 @@ export function createEmptyState(mode: CopyMode): AppState {
     walletScores: [],
     targetPositions: [],
     makerCandidates: [],
+    arbitrageOpportunities: [],
     quotes: {},
     signals: [],
     orders: [],

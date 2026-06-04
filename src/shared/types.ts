@@ -40,6 +40,9 @@ export interface AppConfig {
   makerSimMaxMarketExposureUsdc: number;
   makerSimRewardCaptureRate: number;
   makerSimFillThresholdBps: number;
+  strategyMinScore: number;
+  strategyMaxCatalystRisk: number;
+  strategyMaxInventoryRisk: number;
   simInitialCashUsdc: number;
   workerRunOnce: boolean;
   privateKey?: `0x${string}`;
@@ -160,6 +163,41 @@ export interface MakerQuotePlan {
   referenceMid: number;
 }
 
+export interface StrategyBreakdown {
+  rewardYield: number;
+  spreadYield: number;
+  rebatePotential: number;
+  holdingRewardPotential: number;
+  inventoryRisk: number;
+  catalystRisk: number;
+  liquidityRisk: number;
+  competitionRisk: number;
+  total: number;
+}
+
+export interface StrategyDecision {
+  eligible: boolean;
+  reasons: string[];
+  tier: "prime" | "watch" | "avoid";
+}
+
+export interface ArbitrageOpportunity {
+  id: string;
+  conditionId: string;
+  title: string;
+  type: "buy-basket" | "sell-basket";
+  yesAsset: string;
+  noAsset: string;
+  yesPrice: number;
+  noPrice: number;
+  combinedPrice: number;
+  edge: number;
+  edgeBps: number;
+  executable: boolean;
+  reason: string;
+  updatedAt: number;
+}
+
 export interface MakerCandidate {
   id: string;
   conditionId: string;
@@ -175,6 +213,9 @@ export interface MakerCandidate {
   ask?: number;
   mid?: number;
   score: number;
+  strategyScore: number;
+  strategy: StrategyBreakdown;
+  decision: StrategyDecision;
   tags: string[];
   rejectReasons: string[];
   quotePlan: MakerQuotePlan;
@@ -348,6 +389,7 @@ export interface AppState {
   walletScores: WalletScore[];
   targetPositions: Position[];
   makerCandidates: MakerCandidate[];
+  arbitrageOpportunities: ArbitrageOpportunity[];
   quotes: Record<string, MarketQuote>;
   signals: CopySignal[];
   orders: CopyOrder[];

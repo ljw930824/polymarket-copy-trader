@@ -28,6 +28,7 @@ async function refresh() {
     renderMakerMetrics(state.makerSimulation, state.makerCandidates ?? []);
     renderMakerCandidates(state.makerCandidates ?? []);
     renderMakerPositions(state.makerSimulation?.positions ?? {});
+    renderArbitrageOpportunities(state.arbitrageOpportunities ?? []);
     renderMakerTrades(state.makerSimulation?.trades ?? []);
     renderMakerSnapshots(state.makerSimulation?.snapshots ?? []);
     renderSimulationPositions(state.simulation?.positions ?? {});
@@ -108,18 +109,37 @@ function renderMakerMetrics(simulation, candidates) {
 function renderMakerCandidates(candidates) {
   table(
     "maker-candidates",
-    ["评分", "市场", "结果", "日奖励", "最大价差", "盘口", "建议 bid", "建议 ask", "建议规模", "标签/风险"],
+    [
+      "综合分",
+      "等级",
+      "基础分",
+      "市场",
+      "结果",
+      "日奖励",
+      "最大价差",
+      "盘口",
+      "收益拆解",
+      "风险拆解",
+      "建议 bid",
+      "建议 ask",
+      "规模",
+      "决策原因"
+    ],
     candidates.slice(0, 80).map((candidate) => [
+      scorePill(candidate.strategyScore ?? candidate.score ?? 0),
+      decisionPill(candidate.decision?.tier, candidate.decision?.eligible),
       scorePill(candidate.score ?? 0),
       text(candidate.title ?? "-"),
       text(candidate.outcome ?? "-"),
       usd.format(candidate.dailyReward ?? 0),
       `${formatter.format(candidate.maxSpreadBps ?? 0)} bps`,
       quoteText(candidate),
+      strategyGainText(candidate.strategy),
+      strategyRiskText(candidate.strategy),
       price(candidate.quotePlan?.bidPrice),
       price(candidate.quotePlan?.askPrice),
       usd.format(candidate.quotePlan?.quoteSizeUsdc ?? 0),
-      text([...(candidate.tags ?? []), ...(candidate.rejectReasons ?? [])].join("; "))
+      text([...(candidate.decision?.reasons ?? []), ...(candidate.tags ?? [])].join("; "))
     ])
   );
 }
@@ -139,6 +159,23 @@ function renderMakerPositions(positionsByAsset) {
       colorMoney(position.unrealizedPnl),
       formatter.format(position.score ?? 0),
       usd.format(position.dailyReward ?? 0)
+    ])
+  );
+}
+
+function renderArbitrageOpportunities(opportunities) {
+  table(
+    "arbitrage-opportunities",
+    ["类型", "市场", "Yes价", "No价", "合计", "边际", "可执行", "说明"],
+    opportunities.slice(0, 50).map((item) => [
+      text(item.type),
+      text(item.title),
+      price(item.yesPrice),
+      price(item.noPrice),
+      price(item.combinedPrice),
+      `${formatter.format(item.edgeBps)} bps`,
+      decisionPill(item.executable ? "watch" : "avoid", item.executable),
+      text(item.reason)
     ])
   );
 }
@@ -305,6 +342,30 @@ function statusPill(status) {
 function scorePill(score) {
   const className = score >= 80 ? "pill-filled" : score >= 60 ? "pill-partial" : "pill-failed";
   return `<span class="pill ${className}">${formatter.format(score)}</span>`;
+}
+
+function decisionPill(tier, eligible) {
+  const label = tier ?? "unknown";
+  const className = eligible ? (tier === "prime" ? "pill-filled" : "pill-partial") : "pill-failed";
+  return `<span class="pill ${className}">${escapeHtml(label)}</span>`;
+}
+
+function strategyGainText(strategy) {
+  if (!strategy) return "-";
+  return text(
+    `R ${formatter.format(strategy.rewardYield)} / S ${formatter.format(strategy.spreadYield)} / Reb ${formatter.format(
+      strategy.rebatePotential
+    )} / Hold ${formatter.format(strategy.holdingRewardPotential)}`
+  );
+}
+
+function strategyRiskText(strategy) {
+  if (!strategy) return "-";
+  return text(
+    `Inv ${formatter.format(strategy.inventoryRisk)} / Cat ${formatter.format(strategy.catalystRisk)} / Liq ${formatter.format(
+      strategy.liquidityRisk
+    )} / Comp ${formatter.format(strategy.competitionRisk)}`
+  );
 }
 
 function quoteText(candidate) {

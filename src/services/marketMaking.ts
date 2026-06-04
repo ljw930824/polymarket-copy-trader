@@ -1,4 +1,12 @@
-import type { AppConfig, MakerCandidate, MarketQuote, RewardMarket } from "../shared/types.js";
+import type {
+  AppConfig,
+  ArbitrageOpportunity,
+  MakerCandidate,
+  MarketQuote,
+  RewardMarket,
+  StrategyBreakdown,
+  StrategyDecision
+} from "../shared/types.js";
 import { isSportsMarket } from "./strategyGuards.js";
 
 export function scoreMakerCandidates(
@@ -13,7 +21,13 @@ export function scoreMakerCandidates(
     .filter((candidate) => candidate.dailyReward >= config.makerMinDailyReward)
     .filter((candidate) => candidate.maxSpreadBps <= config.makerMaxSpreadBps)
     .filter((candidate) => candidate.score >= config.makerMinScore)
-    .sort((a, b) => b.score - a.score || b.dailyReward - a.dailyReward)
+    .sort(
+      (a, b) =>
+        Number(b.decision.eligible) - Number(a.decision.eligible) ||
+        b.strategyScore - a.strategyScore ||
+        b.score - a.score ||
+        b.dailyReward - a.dailyReward
+    )
     .slice(0, config.makerTopN);
 }
 
@@ -66,6 +80,10 @@ function buildCandidate(
   score += 16 * (quote?.bid && quote.ask ? 1 : 0.35);
   score += 10 * Math.max(0, 1 - Math.abs(referenceMid - 0.5) * 1.7);
   score += 6 * Math.max(0, 1 - Math.max(0, market.minSize - config.makerQuoteSizeUsdc) / Math.max(market.minSize, 1));
+  const normalizedScore = clamp(score);
+  const strategy = buildStrategyBreakdown(config, market, dailyReward, quote, referenceMid, observedSpreadBps);
+  const strategyScore = clamp(strategy.total);
+  const decision = buildDecision(config, strategyScore, strategy, tags, rejectReasons);
 
   return {
     id: `${market.conditionId}:${token.tokenId}`,
@@ -81,12 +99,152 @@ function buildCandidate(
     bid: quote?.bid,
     ask: quote?.ask,
     mid: referenceMid,
-    score: clamp(score),
+    score: normalizedScore,
+    strategyScore,
+    strategy,
+    decision,
     tags,
     rejectReasons,
     quotePlan,
     updatedAt: Date.now()
   };
+}
+
+export function selectStrategyCandidates(config: AppConfig, candidates: MakerCandidate[]): MakerCandidate[] {
+  return candidates
+    .filter((candidate) => candidate.decision.eligible)
+    .sort((a, b) => b.strategyScore - a.strategyScore || b.score - a.score)
+    .slice(0, config.makerSimTopN);
+}
+
+export function findArbitrageOpportunities(
+  candidates: MakerCandidate[],
+  quotes: Record<string, MarketQuote>,
+  minEdgeBps = 20
+): ArbitrageOpportunity[] {
+  const byCondition = new Map<string, MakerCandidate[]>();
+  for (const candidate of candidates) {
+    byCondition.set(candidate.conditionId, [...(byCondition.get(candidate.conditionId) ?? []), candidate]);
+  }
+  const opportunities: ArbitrageOpportunity[] = [];
+  const now = Date.now();
+
+  for (const [conditionId, group] of byCondition.entries()) {
+    const yes = group.find((candidate) => /^yes$/i.test(candidate.outcome));
+    const no = group.find((candidate) => /^no$/i.test(candidate.outcome));
+    if (!yes || !no) continue;
+    const yesQuote = quotes[yes.asset];
+    const noQuote = quotes[no.asset];
+    if (!yesQuote?.ask || !noQuote?.ask || !yesQuote.bid || !noQuote.bid) continue;
+
+    const buyCost = yesQuote.ask + noQuote.ask;
+    const buyEdge = 1 - buyCost;
+    if (buyEdge * 10_000 >= minEdgeBps) {
+      opportunities.push({
+        id: `${conditionId}:buy-basket`,
+        conditionId,
+        title: yes.title,
+        type: "buy-basket",
+        yesAsset: yes.asset,
+        noAsset: no.asset,
+        yesPrice: yesQuote.ask,
+        noPrice: noQuote.ask,
+        combinedPrice: round(buyCost),
+        edge: round(buyEdge),
+        edgeBps: Math.round(buyEdge * 10_000),
+        executable: true,
+        reason: "buy YES + NO below 1.00 before fees/slippage",
+        updatedAt: now
+      });
+    }
+
+    const sellCredit = yesQuote.bid + noQuote.bid;
+    const sellEdge = sellCredit - 1;
+    if (sellEdge * 10_000 >= minEdgeBps) {
+      opportunities.push({
+        id: `${conditionId}:sell-basket`,
+        conditionId,
+        title: yes.title,
+        type: "sell-basket",
+        yesAsset: yes.asset,
+        noAsset: no.asset,
+        yesPrice: yesQuote.bid,
+        noPrice: noQuote.bid,
+        combinedPrice: round(sellCredit),
+        edge: round(sellEdge),
+        edgeBps: Math.round(sellEdge * 10_000),
+        executable: false,
+        reason: "sell basket requires existing complete YES/NO inventory",
+        updatedAt: now
+      });
+    }
+  }
+
+  return opportunities.sort((a, b) => b.edgeBps - a.edgeBps).slice(0, 50);
+}
+
+function buildStrategyBreakdown(
+  config: AppConfig,
+  market: RewardMarket,
+  dailyReward: number,
+  quote: MarketQuote | undefined,
+  referenceMid: number,
+  observedSpreadBps: number | undefined
+): StrategyBreakdown {
+  const minCapital = Math.max(config.makerQuoteSizeUsdc * 2, market.minSize * 2, 1);
+  const rewardYield = clamp(Math.log1p((dailyReward * config.makerSimRewardCaptureRate * 100) / minCapital) * 28);
+  const spreadBps = observedSpreadBps ?? spreadToBps(market.maxSpread);
+  const spreadYield = clamp(Math.min(28, Math.max(0, spreadBps) / 18));
+  const rebatePotential = clamp((quote?.bid && quote.ask ? 8 : 2) + Math.min(12, dailyReward / 12));
+  const holdingRewardPotential = clamp(isSlowCarryMarket(market.question) && referenceMid > 0.12 && referenceMid < 0.88 ? 8 : 1);
+  const inventoryRisk = clamp(Math.abs(referenceMid - 0.5) * 95 + Math.max(0, market.minSize - config.makerQuoteSizeUsdc) * 0.45);
+  const catalystRisk = clamp(catalystRiskFor(market.question));
+  const liquidityRisk = clamp((quote?.bid && quote.ask ? 10 : 55) + Math.max(0, market.minSize - config.makerQuoteSizeUsdc) * 0.2);
+  const competitionRisk = clamp((spreadBps <= 2 ? 28 : 0) + (dailyReward >= 100 ? 16 : dailyReward >= 25 ? 8 : 0));
+  const total =
+    18 +
+    rewardYield * 0.95 +
+    spreadYield * 0.85 +
+    rebatePotential * 0.7 +
+    holdingRewardPotential * 0.55 -
+    inventoryRisk * 0.32 -
+    catalystRisk * 0.42 -
+    liquidityRisk * 0.28 -
+    competitionRisk * 0.2;
+
+  return {
+    rewardYield: round(rewardYield),
+    spreadYield: round(spreadYield),
+    rebatePotential: round(rebatePotential),
+    holdingRewardPotential: round(holdingRewardPotential),
+    inventoryRisk: round(inventoryRisk),
+    catalystRisk: round(catalystRisk),
+    liquidityRisk: round(liquidityRisk),
+    competitionRisk: round(competitionRisk),
+    total: round(total)
+  };
+}
+
+function buildDecision(
+  config: AppConfig,
+  strategyScore: number,
+  strategy: StrategyBreakdown,
+  tags: string[],
+  rejectReasons: string[]
+): StrategyDecision {
+  const reasons = [...rejectReasons];
+  if (tags.includes("sports")) reasons.push("sports or fast market");
+  if (tags.includes("no-live-book")) reasons.push("missing live book");
+  if (strategyScore < config.strategyMinScore) reasons.push(`strategy score ${strategyScore} < ${config.strategyMinScore}`);
+  if (strategy.catalystRisk > config.strategyMaxCatalystRisk) {
+    reasons.push(`catalyst risk ${strategy.catalystRisk} > ${config.strategyMaxCatalystRisk}`);
+  }
+  if (strategy.inventoryRisk > config.strategyMaxInventoryRisk) {
+    reasons.push(`inventory risk ${strategy.inventoryRisk} > ${config.strategyMaxInventoryRisk}`);
+  }
+  const eligible = reasons.length === 0;
+  const tier = eligible ? (strategyScore >= 72 ? "prime" : "watch") : "avoid";
+  return { eligible, reasons, tier };
 }
 
 function buildQuotePlan(
@@ -119,6 +277,21 @@ function midPrice(quote?: MarketQuote): number {
   return 0.5;
 }
 
+function catalystRiskFor(title: string): number {
+  const value = title.toLowerCase();
+  let risk = 18;
+  if (/\b(today|tomorrow|tonight|this week|june 4|june 5|june 6|by friday|halftime|quarter|period)\b/i.test(value)) risk += 48;
+  if (/\b(before|by) (june|july|august|september|october|november|december) \d{1,2}\b/i.test(value)) risk += 18;
+  if (/\b(charged|released|strike|war|resign|announce|tweet|temperature|settle at)\b/i.test(value)) risk += 16;
+  if (isSportsMarket(value)) risk += 60;
+  if (/\b(2027|2028|2029|2030|governor|senate|election|fed|rate cuts|market cap)\b/i.test(value)) risk -= 12;
+  return Math.max(0, risk);
+}
+
+function isSlowCarryMarket(title: string): boolean {
+  return /\b2026|2027|2028|election|governor|senate|fed|rate cuts|market cap|before 2027\b/i.test(title);
+}
+
 export function spreadToBps(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return Number.POSITIVE_INFINITY;
   if (value <= 1) return Math.round(value * 10_000);
@@ -136,6 +309,11 @@ function rewardWeight(dailyReward: number, maxReward: number): number {
 
 function roundPrice(value: number): number {
   return Math.min(0.99, Math.max(0.01, Math.round(value * 1000) / 1000));
+}
+
+function round(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 10) / 10;
 }
 
 function clamp(value: number): number {

@@ -42,6 +42,9 @@ const config = {
   makerSimMaxMarketExposureUsdc: 50,
   makerSimRewardCaptureRate: 0.02,
   makerSimFillThresholdBps: 25,
+  strategyMinScore: 55,
+  strategyMaxCatalystRisk: 55,
+  strategyMaxInventoryRisk: 70,
   simInitialCashUsdc: 100,
   workerRunOnce: false,
   polySignatureType: 3
@@ -98,6 +101,19 @@ function makerCandidate(): MakerCandidate {
     ask: 0.51,
     mid: 0.5,
     score: 80,
+    strategyScore: 80,
+    strategy: {
+      rewardYield: 10,
+      spreadYield: 10,
+      rebatePotential: 10,
+      holdingRewardPotential: 5,
+      inventoryRisk: 10,
+      catalystRisk: 10,
+      liquidityRisk: 10,
+      competitionRisk: 10,
+      total: 80
+    },
+    decision: { eligible: true, reasons: [], tier: "prime" },
     tags: [],
     rejectReasons: [],
     quotePlan: {

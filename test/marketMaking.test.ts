@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { scoreMakerCandidates, spreadToBps } from "../src/services/marketMaking.js";
+import {
+  findArbitrageOpportunities,
+  scoreMakerCandidates,
+  selectStrategyCandidates,
+  spreadToBps
+} from "../src/services/marketMaking.js";
 import type { AppConfig, RewardMarket } from "../src/shared/types.js";
 
 const config = {
@@ -41,6 +46,9 @@ const config = {
   makerSimMaxMarketExposureUsdc: 50,
   makerSimRewardCaptureRate: 0.02,
   makerSimFillThresholdBps: 25,
+  strategyMinScore: 40,
+  strategyMaxCatalystRisk: 55,
+  strategyMaxInventoryRisk: 70,
   simInitialCashUsdc: 100,
   workerRunOnce: false,
   polySignatureType: 3
@@ -59,6 +67,8 @@ describe("market making rewards", () => {
 
     expect(candidates).toHaveLength(1);
     expect(candidates[0].asset).toBe("asset-a");
+    expect(candidates[0].strategyScore).toBeGreaterThan(0);
+    expect(candidates[0].strategy.rewardYield).toBeGreaterThan(0);
     expect(candidates[0].quotePlan.bidPrice).toBeLessThan(candidates[0].quotePlan.askPrice);
     expect(candidates[0].quotePlan.quoteSizeUsdc).toBeGreaterThanOrEqual(config.makerQuoteSizeUsdc);
   });
@@ -71,6 +81,43 @@ describe("market making rewards", () => {
   it("normalizes spread formats to basis points", () => {
     expect(spreadToBps(0.035)).toBe(350);
     expect(spreadToBps(3.5)).toBe(350);
+  });
+
+  it("selects only strategy-eligible maker candidates", () => {
+    const candidates = scoreMakerCandidates(
+      config,
+      [
+        rewardMarket("Will no Fed rate cuts happen in 2026?", "asset-good", 120, 3.5),
+        rewardMarket("Will Team A win tonight?", "asset-fast", 120, 3.5)
+      ],
+      {
+        "asset-good": { assetId: "asset-good", bid: 0.49, ask: 0.51, updatedAt: 1 },
+        "asset-fast": { assetId: "asset-fast", bid: 0.49, ask: 0.51, updatedAt: 1 }
+      }
+    );
+
+    const selected = selectStrategyCandidates(config, candidates);
+    expect(selected.map((candidate) => candidate.asset)).toContain("asset-good");
+    expect(selected.map((candidate) => candidate.asset)).not.toContain("asset-fast");
+  });
+
+  it("detects complementary yes/no basket arbitrage", () => {
+    const candidates = scoreMakerCandidates(
+      config,
+      [binaryRewardMarket("Will test market resolve yes?", "asset-yes", "asset-no", 10, 3.5)],
+      {
+        "asset-yes": { assetId: "asset-yes", bid: 0.47, ask: 0.48, updatedAt: 1 },
+        "asset-no": { assetId: "asset-no", bid: 0.5, ask: 0.51, updatedAt: 1 }
+      }
+    );
+
+    const opportunities = findArbitrageOpportunities(candidates, {
+      "asset-yes": { assetId: "asset-yes", bid: 0.47, ask: 0.48, updatedAt: 1 },
+      "asset-no": { assetId: "asset-no", bid: 0.5, ask: 0.51, updatedAt: 1 }
+    });
+
+    expect(opportunities[0].type).toBe("buy-basket");
+    expect(opportunities[0].edgeBps).toBe(100);
   });
 });
 
@@ -85,5 +132,28 @@ function rewardMarket(question: string, asset: string, dailyReward: number, maxS
     maxSpread,
     rates: [{ assetAddress: asset, dailyReward }],
     tokens: [{ tokenId: asset, outcome: "Yes" }]
+  };
+}
+
+function binaryRewardMarket(
+  question: string,
+  yesAsset: string,
+  noAsset: string,
+  dailyReward: number,
+  maxSpread: number
+): RewardMarket {
+  return {
+    conditionId: `condition-${yesAsset}`,
+    question,
+    active: true,
+    closed: false,
+    acceptingOrders: true,
+    minSize: 3,
+    maxSpread,
+    rates: [{ assetAddress: yesAsset, dailyReward }],
+    tokens: [
+      { tokenId: yesAsset, outcome: "Yes" },
+      { tokenId: noAsset, outcome: "No" }
+    ]
   };
 }

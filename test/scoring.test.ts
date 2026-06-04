@@ -41,6 +41,9 @@ const config = {
   makerSimMaxMarketExposureUsdc: 50,
   makerSimRewardCaptureRate: 0.02,
   makerSimFillThresholdBps: 25,
+  strategyMinScore: 55,
+  strategyMaxCatalystRisk: 55,
+  strategyMaxInventoryRisk: 70,
   simInitialCashUsdc: 100,
   workerRunOnce: false,
   polySignatureType: 3

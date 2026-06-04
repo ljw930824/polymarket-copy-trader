@@ -16,7 +16,7 @@ import {
   rebuildSimulationFromHistory
 } from "./services/simulator.js";
 import { prepareOrderWithStrategyGuards } from "./services/strategyGuards.js";
-import { scoreMakerCandidates } from "./services/marketMaking.js";
+import { findArbitrageOpportunities, scoreMakerCandidates, selectStrategyCandidates } from "./services/marketMaking.js";
 import { ensureMakerSimulation, updateMakerSimulation } from "./services/makerSimulator.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
@@ -79,10 +79,9 @@ async function main(): Promise<void> {
         rewardMarkets = await clobApi.samplingMarkets();
         const rewardAssets = rewardMarkets.flatMap((market) => market.tokens.map((token) => token.tokenId));
         marketWs.subscribe(rewardAssets);
-        const seedCandidates = scoreMakerCandidates(config, rewardMarkets, { ...seededQuotes, ...state.quotes });
         seededQuotes = {
           ...seededQuotes,
-          ...quoteRecord(await clobApi.prices(seedCandidates.map((candidate) => candidate.asset)))
+          ...quoteRecord(await clobApi.prices(rewardAssets))
         };
         lastMakerRefresh = Date.now();
         logger.info(
@@ -108,10 +107,21 @@ async function main(): Promise<void> {
         }
         logger.info({ signal: signal.id, status: order.status, mode: config.mode }, "copy order processed");
       }
-      state.quotes = { ...seededQuotes, ...marketWs.snapshot() };
+      state.quotes = mergeQuoteRecords(seededQuotes, marketWs.snapshot());
       state.makerCandidates = config.makerEnabled ? scoreMakerCandidates(config, rewardMarkets, state.quotes) : [];
+      if (config.makerEnabled && state.makerCandidates.length > 0 && state.makerCandidates.every((candidate) => !candidate.decision.eligible)) {
+        const missingBookAssets = state.makerCandidates
+          .filter((candidate) => candidate.tags.includes("no-live-book"))
+          .map((candidate) => candidate.asset);
+        if (missingBookAssets.length > 0) {
+          seededQuotes = { ...seededQuotes, ...quoteRecord(await clobApi.prices(missingBookAssets)) };
+          state.quotes = mergeQuoteRecords(seededQuotes, marketWs.snapshot());
+          state.makerCandidates = scoreMakerCandidates(config, rewardMarkets, state.quotes);
+        }
+      }
+      state.arbitrageOpportunities = config.makerEnabled ? findArbitrageOpportunities(state.makerCandidates, state.quotes) : [];
       state.makerSimulation = config.makerEnabled
-        ? updateMakerSimulation(config, state.makerSimulation, state.makerCandidates, state.quotes)
+        ? updateMakerSimulation(config, state.makerSimulation, selectStrategyCandidates(config, state.makerCandidates), state.quotes)
         : state.makerSimulation;
       state.simulation = markSimulation(state.simulation, state.quotes, state.targetPositions);
       state.lastError = undefined;
@@ -152,6 +162,23 @@ function uniqueAssets(positions: Position[]): string[] {
 
 function quoteRecord(quotes: MarketQuote[]): Record<string, MarketQuote> {
   return Object.fromEntries(quotes.map((quote) => [quote.assetId, quote]));
+}
+
+function mergeQuoteRecords(base: Record<string, MarketQuote>, overlay: Record<string, MarketQuote>): Record<string, MarketQuote> {
+  const merged = { ...base };
+  for (const [assetId, quote] of Object.entries(overlay)) {
+    const current = merged[assetId];
+    merged[assetId] = current
+      ? {
+          assetId,
+          bid: quote.bid ?? current.bid,
+          ask: quote.ask ?? current.ask,
+          last: quote.last ?? current.last,
+          updatedAt: Math.max(current.updatedAt, quote.updatedAt)
+        }
+      : quote;
+  }
+  return merged;
 }
 
 main().catch((error) => {
