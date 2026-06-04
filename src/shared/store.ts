@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { AppState, CopyMode, RiskState, SimulationState } from "./types.js";
+import type { AppState, CopyMode, MakerSimulationState, RiskState, SimulationState } from "./types.js";
 
 export const DEFAULT_STATE_PATH = "data/state.json";
 
@@ -32,6 +32,27 @@ export function createSimulationState(initialCash = 0): SimulationState {
   };
 }
 
+export function createMakerSimulationState(initialCash = 0): MakerSimulationState {
+  return {
+    initialCash,
+    cash: initialCash,
+    positions: {},
+    trades: [],
+    snapshots: [],
+    lastMidByAsset: {},
+    accruedReward: 0,
+    inventoryValue: 0,
+    realizedPnl: 0,
+    unrealizedPnl: 0,
+    totalEquity: initialCash,
+    totalPnl: 0,
+    roi: 0,
+    maxDrawdown: 0,
+    equityHighWatermark: initialCash,
+    updatedAt: Date.now()
+  };
+}
+
 export function createEmptyState(mode: CopyMode): AppState {
   return {
     updatedAt: Date.now(),
@@ -44,6 +65,7 @@ export function createEmptyState(mode: CopyMode): AppState {
     signals: [],
     orders: [],
     simulation: createSimulationState(),
+    makerSimulation: createMakerSimulationState(),
     risk: emptyRisk()
   };
 }

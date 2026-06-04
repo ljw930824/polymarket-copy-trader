@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadConfig } from "./shared/config.js";
-import { createSimulationState, emptyRisk } from "./shared/store.js";
+import { createMakerSimulationState, createSimulationState, emptyRisk } from "./shared/store.js";
 import type { AppState } from "./shared/types.js";
 
 const statePath = "data/state.json";
@@ -26,11 +26,23 @@ async function main(): Promise<void> {
     orders: [],
     risk: emptyRisk(),
     simulation: createSimulationState(config.simInitialCashUsdc),
+    makerSimulation: createMakerSimulationState(config.makerSimInitialCashUsdc),
     lastError: undefined
   };
 
   await writeFile(statePath, JSON.stringify(next, null, 2));
-  console.log(JSON.stringify({ archivePath, cycleStartedAt: now, initialCash: config.simInitialCashUsdc }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        archivePath,
+        cycleStartedAt: now,
+        initialCash: config.simInitialCashUsdc,
+        makerInitialCash: config.makerSimInitialCashUsdc
+      },
+      null,
+      2
+    )
+  );
 }
 
 main().catch((error) => {

@@ -36,6 +36,11 @@ const config = {
   makerMaxSpreadBps: 350,
   makerMinScore: 50,
   makerQuoteSizeUsdc: 5,
+  makerSimInitialCashUsdc: 100,
+  makerSimTopN: 8,
+  makerSimMaxMarketExposureUsdc: 50,
+  makerSimRewardCaptureRate: 0.02,
+  makerSimFillThresholdBps: 25,
   simInitialCashUsdc: 100,
   workerRunOnce: false,
   polySignatureType: 3

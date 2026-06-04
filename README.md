@@ -1,11 +1,11 @@
 # Polymarket 策略控制台
 
-这是一个本地运行的 Polymarket 策略研究工具。它现在包含两条独立能力：
+这是一个本地运行的 Polymarket 策略研究工具。系统现在以“做市奖励实验”为主线，“跟单钱包”为辅助信号：
 
-- 跟单观察：筛选 PnL、ROI、成交量较强的钱包，监听公开 activity，生成跟单信号和 paper/live 订单。
-- 做市奖励观察：读取 Polymarket CLOB 的 reward-eligible markets，按日奖励、最大价差、最小挂单、盘口和风险标签做评分，给出被动 bid/ask 建议。
+- 主策略：读取 Polymarket CLOB 的 reward-eligible markets，按日奖励、最大价差、最小挂单、盘口和风险标签做评分，生成被动 bid/ask 计划，并用本地 paper maker 账本模拟库存、成交、预计奖励和回撤。
+- 辅助策略：筛选 PnL、ROI、成交量较强的钱包，监听公开 activity，生成跟单信号和 paper/live 订单，用于观察市场和对照实验。
 
-默认运行在 `paper` 模式，不会真实下单。做市奖励模块目前只做观察和评分，不会自动提交 maker 挂单。
+默认运行在 `paper` 模式，不会真实下单。做市奖励模块目前只做观察、评分和模拟，不会自动提交真实 maker 挂单。
 
 ## 安装
 
@@ -89,6 +89,11 @@ MAKER_MIN_DAILY_REWARD=1
 MAKER_MAX_SPREAD_BPS=500
 MAKER_MIN_SCORE=30
 MAKER_QUOTE_SIZE_USDC=20
+MAKER_SIM_INITIAL_CASH_USDC=100
+MAKER_SIM_TOP_N=8
+MAKER_SIM_MAX_MARKET_EXPOSURE_USDC=50
+MAKER_SIM_REWARD_CAPTURE_RATE=0.02
+MAKER_SIM_FILL_THRESHOLD_BPS=25
 
 SIM_INITIAL_CASH_USDC=100
 ```
@@ -102,6 +107,11 @@ SIM_INITIAL_CASH_USDC=100
 - `MAKER_MAX_SPREAD_BPS`：只保留最大允许价差不超过该值的市场，500 表示 5%。
 - `MAKER_MIN_SCORE`：低于该评分的候选不展示。
 - `MAKER_QUOTE_SIZE_USDC`：生成建议挂单规模时使用的本地参考金额。
+- `MAKER_SIM_INITIAL_CASH_USDC`：做市 paper 账本初始资金。
+- `MAKER_SIM_TOP_N`：做市模拟每轮跟进评分最高的前 N 个候选。
+- `MAKER_SIM_MAX_MARKET_EXPOSURE_USDC`：单个 outcome token 最大库存敞口。
+- `MAKER_SIM_REWARD_CAPTURE_RATE`：预计能捕获的官方日奖励比例。默认 2%，因为真实奖励会和其他 LP 竞争。
+- `MAKER_SIM_FILL_THRESHOLD_BPS`：中间价穿越被动 bid/ask 多少 bps 后，模拟成交。
 
 做市评分考虑：
 
@@ -111,6 +121,14 @@ SIM_INITIAL_CASH_USDC=100
 - 最小挂单要求过高会扣分。
 - 体育、电竞、临场强波动市场默认大幅扣分并过滤。
 - 市场关闭、不活跃、不接受订单会扣分并过滤。
+
+做市模拟规则：
+
+- 不假设自己一定成交；只有当中间价穿越本地计划的被动 bid/ask 时，才记录 paper maker 成交。
+- BUY 会增加库存，SELL 会减少库存并计算已实现盈亏。
+- 持仓按最新 bid/ask 中间价 mark-to-market。
+- 奖励收益按 `MAKER_SIM_REWARD_CAPTURE_RATE` 做保守估算，并单独显示为“预计已获奖励”。
+- 做市账本和跟单模拟盘完全分开，避免两种策略互相污染。
 
 ## Dashboard 颜色含义
 
@@ -167,6 +185,7 @@ node --check public\app.js
 - 跟单信号去重。
 - 模拟盘买入、卖出、PnL、ROI、最大回撤。
 - 做市奖励候选评分、体育市场过滤、价差单位换算。
+- 做市 paper 账本的被动成交、库存标记、奖励估算和权益更新。
 
 ## 官方 API 来源
 
@@ -174,6 +193,7 @@ node --check public\app.js
 - Data API positions：`GET https://data-api.polymarket.com/positions`
 - Data API activity：`GET https://data-api.polymarket.com/activity`
 - CLOB reward markets：`GET https://clob.polymarket.com/sampling-markets`
+- CLOB batch prices：`POST https://clob.polymarket.com/prices`
 - Market WebSocket：`wss://ws-subscriptions-clob.polymarket.com/ws/market`
 - CLOB SDK：`@polymarket/clob-client-v2`
 

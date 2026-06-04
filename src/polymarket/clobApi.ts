@@ -1,5 +1,5 @@
 import { fetchJson } from "../shared/http.js";
-import type { RewardMarket, RewardRate } from "../shared/types.js";
+import type { MarketQuote, RewardMarket, RewardRate } from "../shared/types.js";
 
 interface RawSamplingMarket {
   condition_id?: unknown;
@@ -36,6 +36,34 @@ export class ClobApiClient {
           ? payload.markets
           : [];
     return rawMarkets.map(normalizeMarket).filter((market): market is RewardMarket => Boolean(market));
+  }
+
+  async prices(assetIds: string[]): Promise<MarketQuote[]> {
+    const uniqueAssets = [...new Set(assetIds.filter(Boolean))];
+    const quotes: MarketQuote[] = [];
+    for (const chunk of chunks(uniqueAssets, 200)) {
+      const body = chunk.flatMap((tokenId) => [
+        { token_id: tokenId, side: "BUY" },
+        { token_id: tokenId, side: "SELL" }
+      ]);
+      const payload = await fetchJson<Record<string, Record<string, string | number>>>(
+        new URL("/prices", this.host),
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body)
+        }
+      );
+      const now = Date.now();
+      for (const [assetId, sides] of Object.entries(payload)) {
+        const buy = numberValue(sides.BUY);
+        const sell = numberValue(sides.SELL);
+        const bid = buy && sell ? Math.min(buy, sell) : sell || undefined;
+        const ask = buy && sell ? Math.max(buy, sell) : buy || undefined;
+        quotes.push({ assetId, bid, ask, updatedAt: now });
+      }
+    }
+    return quotes;
   }
 }
 
@@ -126,4 +154,12 @@ function boolValue(...values: unknown[]): boolean | undefined {
     }
   }
   return undefined;
+}
+
+function chunks<T>(values: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size));
+  }
+  return result;
 }

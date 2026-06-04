@@ -39,8 +39,9 @@
       <section class="tab-panel" id="tab-maker">
         <section class="explain maker-tone">
           <h2>做市奖励观察</h2>
-          <p>紫色区域是官方 liquidity rewards 市场的观察器。它只做评分和被动 bid/ask 建议，不会自动挂真实 maker 单。做市奖励更前置，但风险来自库存、价格跳变、成交后单边暴露和规则变化。</p>
+          <p>紫色区域是官方 liquidity rewards 市场的策略实验台。它会观察奖励市场、生成被动 bid/ask 计划，并用本地 paper 账本模拟库存、成交、预计奖励和回撤；不会自动挂真实 maker 单。</p>
         </section>
+        <section class="grid metrics maker-metrics" id="maker-metrics"></section>
         <section class="grid one">
           <article class="maker-card">
             <div class="section-head">
@@ -48,6 +49,27 @@
               <span>按日奖励、最大价差、盘口可用性、市场类型和最小挂单综合评分</span>
             </div>
             <div id="maker-candidates" class="table"></div>
+          </article>
+          <article class="maker-card">
+            <div class="section-head">
+              <h2>做市模拟持仓</h2>
+              <span>本地 paper maker 账本的库存、均价、标记价和未实现盈亏</span>
+            </div>
+            <div id="maker-positions" class="table"></div>
+          </article>
+          <article class="maker-card">
+            <div class="section-head">
+              <h2>做市模拟成交</h2>
+              <span>中间价穿越被动 bid/ask 时产生的模拟成交</span>
+            </div>
+            <div id="maker-trades" class="table"></div>
+          </article>
+          <article class="maker-card">
+            <div class="section-head">
+              <h2>做市权益快照</h2>
+              <span>每轮 worker 记录的候选数、活跃盘口、预计奖励和权益曲线</span>
+            </div>
+            <div id="maker-snapshots" class="table"></div>
           </article>
         </section>
       </section>

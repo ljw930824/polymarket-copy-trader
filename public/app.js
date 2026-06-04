@@ -25,7 +25,11 @@ async function refresh() {
         )} · dashboard ${time(state.servedAt)}`;
 
     renderMetrics(state);
+    renderMakerMetrics(state.makerSimulation, state.makerCandidates ?? []);
     renderMakerCandidates(state.makerCandidates ?? []);
+    renderMakerPositions(state.makerSimulation?.positions ?? {});
+    renderMakerTrades(state.makerSimulation?.trades ?? []);
+    renderMakerSnapshots(state.makerSimulation?.snapshots ?? []);
     renderSimulationPositions(state.simulation?.positions ?? {});
     renderSimulationTrades(state.simulation?.trades ?? []);
     renderWallets(state.walletScores ?? []);
@@ -64,23 +68,40 @@ function renderMetrics(state) {
   const signalAgeMs = latestSignal ? Date.now() - latestSignal.sourceTimestamp : 0;
   const detectionLagMs = latestSignal ? latestSignal.detectedAt - latestSignal.sourceTimestamp : 0;
   const simPnl = state.simulation?.totalPnl ?? 0;
-  const simRoi = state.simulation?.roi ?? 0;
+  const makerPnl = state.makerSimulation?.totalPnl ?? 0;
 
   document.getElementById("metrics").innerHTML = [
     metric("跟踪钱包", state.walletScores?.length ?? 0),
     metric("做市候选", state.makerCandidates?.length ?? 0),
     metric("最高做市评分", latestMaker ? formatter.format(latestMaker.score) : "-"),
     metric("最高日奖励", latestMaker ? usd.format(latestMaker.dailyReward) : "-"),
+    metric("做市实验盈亏", signedUsd(makerPnl), pnlClass(makerPnl)),
     metric("信号数量", state.signals?.length ?? 0),
     metric("订单数量", state.orders?.length ?? 0),
     metric("周期开始", state.cycleStartedAt ? time(state.cycleStartedAt) : "-"),
     metric("今日名义金额", usd.format(state.risk?.notionalUsdc ?? 0)),
-    metric("模拟权益", usd.format(state.simulation?.totalEquity ?? 0)),
-    metric("模拟盈亏", signedUsd(simPnl), pnlClass(simPnl)),
-    metric("模拟 ROI", percent(simRoi), pnlClass(simRoi)),
-    metric("最大回撤", percent(state.simulation?.maxDrawdown ?? 0), "negative"),
+    metric("跟单模拟权益", usd.format(state.simulation?.totalEquity ?? 0)),
+    metric("跟单模拟盈亏", signedUsd(simPnl), pnlClass(simPnl)),
+    metric("跟单模拟 ROI", percent(state.simulation?.roi ?? 0), pnlClass(state.simulation?.roi ?? 0)),
     metric("上一信号距今", signalAgeMs ? `${formatter.format(signalAgeMs / 1000)} 秒` : "-"),
     metric("公开 API 延迟", detectionLagMs ? `${formatter.format(detectionLagMs / 1000)} 秒` : "-")
+  ].join("");
+}
+
+function renderMakerMetrics(simulation, candidates) {
+  const activeQuoteCount = (candidates ?? []).filter((candidate) => candidate.bid && candidate.ask).length;
+  const latestSnapshot = simulation?.snapshots?.[0];
+  document.getElementById("maker-metrics").innerHTML = [
+    metric("做市权益", usd.format(simulation?.totalEquity ?? 0)),
+    metric("做市总盈亏", signedUsd(simulation?.totalPnl ?? 0), pnlClass(simulation?.totalPnl ?? 0)),
+    metric("做市 ROI", percent(simulation?.roi ?? 0), pnlClass(simulation?.roi ?? 0)),
+    metric("现金", usd.format(simulation?.cash ?? 0)),
+    metric("库存市值", usd.format(simulation?.inventoryValue ?? 0)),
+    metric("预计已获奖励", usd.format(simulation?.accruedReward ?? 0)),
+    metric("预计日奖励", usd.format(latestSnapshot?.estimatedDailyReward ?? 0)),
+    metric("活跃盘口", `${activeQuoteCount}/${candidates.length}`),
+    metric("模拟成交", simulation?.trades?.length ?? 0),
+    metric("最大回撤", percent(simulation?.maxDrawdown ?? 0), "negative")
   ].join("");
 }
 
@@ -99,6 +120,62 @@ function renderMakerCandidates(candidates) {
       price(candidate.quotePlan?.askPrice),
       usd.format(candidate.quotePlan?.quoteSizeUsdc ?? 0),
       text([...(candidate.tags ?? []), ...(candidate.rejectReasons ?? [])].join("; "))
+    ])
+  );
+}
+
+function renderMakerPositions(positionsByAsset) {
+  const positions = Object.values(positionsByAsset).sort((a, b) => b.marketValue - a.marketValue);
+  table(
+    "maker-positions",
+    ["市场", "结果", "份额", "成本均价", "标记价", "库存市值", "未实现盈亏", "评分", "日奖励"],
+    positions.slice(0, 80).map((position) => [
+      text(position.title ?? shortText(position.asset)),
+      text(position.outcome ?? "-"),
+      formatter.format(position.shares),
+      price(position.avgCost),
+      price(position.markPrice),
+      usd.format(position.marketValue),
+      colorMoney(position.unrealizedPnl),
+      formatter.format(position.score ?? 0),
+      usd.format(position.dailyReward ?? 0)
+    ])
+  );
+}
+
+function renderMakerTrades(trades) {
+  table(
+    "maker-trades",
+    ["时间", "方向", "市场", "结果", "份额", "价格", "金额", "已实现盈亏", "原因"],
+    trades.slice(0, 80).map((trade) => [
+      time(trade.timestamp),
+      sidePill(trade.side),
+      text(trade.title ?? shortText(trade.asset)),
+      text(trade.outcome ?? "-"),
+      formatter.format(trade.shares),
+      price(trade.price),
+      usd.format(trade.notional),
+      colorMoney(trade.realizedPnl),
+      text(trade.reason ?? "")
+    ])
+  );
+}
+
+function renderMakerSnapshots(snapshots) {
+  table(
+    "maker-snapshots",
+    ["时间", "候选", "活跃盘口", "Top评分", "预计日奖励", "累计奖励", "现金", "库存", "权益", "ROI"],
+    snapshots.slice(0, 80).map((snapshot) => [
+      time(snapshot.timestamp),
+      formatter.format(snapshot.candidateCount),
+      formatter.format(snapshot.activeQuoteCount),
+      formatter.format(snapshot.topScore),
+      usd.format(snapshot.estimatedDailyReward),
+      usd.format(snapshot.accruedReward),
+      usd.format(snapshot.cash),
+      usd.format(snapshot.inventoryValue),
+      usd.format(snapshot.totalEquity),
+      percent(snapshot.roi)
     ])
   );
 }
@@ -199,10 +276,12 @@ function renderOrders(orders) {
 }
 
 function table(id, headers, rows) {
+  const element = document.getElementById(id);
+  if (!element) return;
   const body = rows.length
     ? rows.map((row) => `<tr>${row.map((cell) => `<td>${String(cell)}</td>`).join("")}</tr>`).join("")
     : `<tr><td colspan="${headers.length}" class="muted">暂无数据</td></tr>`;
-  document.getElementById(id).innerHTML = `<table><thead><tr>${headers
+  element.innerHTML = `<table><thead><tr>${headers
     .map((header) => `<th>${escapeHtml(header)}</th>`)
     .join("")}</tr></thead><tbody>${body}</tbody></table>`;
 }

@@ -35,6 +35,11 @@ export interface AppConfig {
   makerMaxSpreadBps: number;
   makerMinScore: number;
   makerQuoteSizeUsdc: number;
+  makerSimInitialCashUsdc: number;
+  makerSimTopN: number;
+  makerSimMaxMarketExposureUsdc: number;
+  makerSimRewardCaptureRate: number;
+  makerSimFillThresholdBps: number;
   simInitialCashUsdc: number;
   workerRunOnce: boolean;
   privateKey?: `0x${string}`;
@@ -259,6 +264,75 @@ export interface SimulationState {
   updatedAt: number;
 }
 
+export interface MakerSimulationPosition {
+  asset: string;
+  conditionId: string;
+  title: string;
+  outcome: string;
+  shares: number;
+  avgCost: number;
+  costBasis: number;
+  markPrice: number;
+  marketValue: number;
+  realizedPnl: number;
+  unrealizedPnl: number;
+  dailyReward: number;
+  score: number;
+  updatedAt: number;
+}
+
+export interface MakerSimulationTrade {
+  id: string;
+  timestamp: number;
+  candidateId: string;
+  side: Side;
+  asset: string;
+  conditionId: string;
+  title: string;
+  outcome: string;
+  price: number;
+  shares: number;
+  notional: number;
+  cashAfter: number;
+  realizedPnl: number;
+  reason: string;
+  score: number;
+}
+
+export interface MakerSimulationSnapshot {
+  timestamp: number;
+  candidateCount: number;
+  activeQuoteCount: number;
+  topScore: number;
+  estimatedDailyReward: number;
+  accruedReward: number;
+  cash: number;
+  inventoryValue: number;
+  totalEquity: number;
+  totalPnl: number;
+  roi: number;
+  maxDrawdown: number;
+}
+
+export interface MakerSimulationState {
+  initialCash: number;
+  cash: number;
+  positions: Record<string, MakerSimulationPosition>;
+  trades: MakerSimulationTrade[];
+  snapshots: MakerSimulationSnapshot[];
+  lastMidByAsset: Record<string, number>;
+  accruedReward: number;
+  inventoryValue: number;
+  realizedPnl: number;
+  unrealizedPnl: number;
+  totalEquity: number;
+  totalPnl: number;
+  roi: number;
+  maxDrawdown: number;
+  equityHighWatermark: number;
+  updatedAt: number;
+}
+
 export interface RiskState {
   date: string;
   orderCount: number;
@@ -278,6 +352,7 @@ export interface AppState {
   signals: CopySignal[];
   orders: CopyOrder[];
   simulation: SimulationState;
+  makerSimulation: MakerSimulationState;
   risk: RiskState;
   lastError?: string;
 }

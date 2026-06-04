@@ -2,7 +2,7 @@ import pino from "pino";
 import { loadConfig } from "./shared/config.js";
 import { sleep } from "./shared/http.js";
 import { createEmptyState, JsonStateStore } from "./shared/store.js";
-import type { ActivityEvent, AppState, Position, RewardMarket } from "./shared/types.js";
+import type { ActivityEvent, AppState, MarketQuote, Position, RewardMarket } from "./shared/types.js";
 import { DataApiClient } from "./polymarket/dataApi.js";
 import { ClobApiClient } from "./polymarket/clobApi.js";
 import { MarketWsCache } from "./polymarket/marketWs.js";
@@ -17,6 +17,7 @@ import {
 } from "./services/simulator.js";
 import { prepareOrderWithStrategyGuards } from "./services/strategyGuards.js";
 import { scoreMakerCandidates } from "./services/marketMaking.js";
+import { ensureMakerSimulation, updateMakerSimulation } from "./services/makerSimulator.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
@@ -32,6 +33,7 @@ async function main(): Promise<void> {
   state.cycleStartedAt = state.cycleStartedAt ?? Date.now();
   const engine = new CopyEngine(state.signals.map((signal) => signal.id));
   state.simulation = ensureSimulation(state.simulation, config.simInitialCashUsdc);
+  state.makerSimulation = ensureMakerSimulation(state.makerSimulation, config.makerSimInitialCashUsdc);
   if (state.simulation.trades.length === 0 && state.orders.length > 0 && state.signals.length > 0) {
     state.simulation = rebuildSimulationFromHistory(
       config.simInitialCashUsdc,
@@ -44,6 +46,7 @@ async function main(): Promise<void> {
   let lastLeaderboardRefresh = 0;
   let lastMakerRefresh = 0;
   let rewardMarkets: RewardMarket[] = [];
+  let seededQuotes: Record<string, MarketQuote> = {};
 
   if (config.mode === "live") {
     const geo = await dataApi.geoblock();
@@ -76,8 +79,16 @@ async function main(): Promise<void> {
         rewardMarkets = await clobApi.samplingMarkets();
         const rewardAssets = rewardMarkets.flatMap((market) => market.tokens.map((token) => token.tokenId));
         marketWs.subscribe(rewardAssets);
+        const seedCandidates = scoreMakerCandidates(config, rewardMarkets, { ...seededQuotes, ...state.quotes });
+        seededQuotes = {
+          ...seededQuotes,
+          ...quoteRecord(await clobApi.prices(seedCandidates.map((candidate) => candidate.asset)))
+        };
         lastMakerRefresh = Date.now();
-        logger.info({ markets: rewardMarkets.length, assets: rewardAssets.length }, "maker reward markets refreshed");
+        logger.info(
+          { markets: rewardMarkets.length, assets: rewardAssets.length, seededQuotes: Object.keys(seededQuotes).length },
+          "maker reward markets refreshed"
+        );
       }
 
       const events = await loadActivity(dataApi, state.walletScores.map((wallet) => wallet.wallet), config.activityLimit);
@@ -97,8 +108,11 @@ async function main(): Promise<void> {
         }
         logger.info({ signal: signal.id, status: order.status, mode: config.mode }, "copy order processed");
       }
-      state.quotes = marketWs.snapshot();
+      state.quotes = { ...seededQuotes, ...marketWs.snapshot() };
       state.makerCandidates = config.makerEnabled ? scoreMakerCandidates(config, rewardMarkets, state.quotes) : [];
+      state.makerSimulation = config.makerEnabled
+        ? updateMakerSimulation(config, state.makerSimulation, state.makerCandidates, state.quotes)
+        : state.makerSimulation;
       state.simulation = markSimulation(state.simulation, state.quotes, state.targetPositions);
       state.lastError = undefined;
       await store.write(state);
@@ -134,6 +148,10 @@ async function loadActivity(dataApi: DataApiClient, wallets: string[], limit: nu
 
 function uniqueAssets(positions: Position[]): string[] {
   return [...new Set(positions.map((position) => position.asset).filter(Boolean))];
+}
+
+function quoteRecord(quotes: MarketQuote[]): Record<string, MarketQuote> {
+  return Object.fromEntries(quotes.map((quote) => [quote.assetId, quote]));
 }
 
 main().catch((error) => {
