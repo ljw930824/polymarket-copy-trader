@@ -1,4 +1,5 @@
 const formatter = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 });
+const priceFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const usd = new Intl.NumberFormat("zh-CN", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 let refreshCount = 0;
 let lastStateUpdatedAt = 0;
@@ -19,11 +20,12 @@ async function refresh() {
     renderMode(state);
     document.getElementById("status").innerHTML = state.lastError
       ? `<span class="bad">${escapeHtml(state.lastError)}</span>`
-      : `轮询 ${refreshCount} 次 · 状态${stateChanged ? "已更新" : "未变化"} · worker ${new Date(
+      : `轮询 ${refreshCount} 次 · 状态${stateChanged ? "已更新" : "未变化"} · worker ${time(
           state.updatedAt
-        ).toLocaleTimeString()} · dashboard ${new Date(state.servedAt).toLocaleTimeString()}`;
+        )} · dashboard ${time(state.servedAt)}`;
 
     renderMetrics(state);
+    renderMakerCandidates(state.makerCandidates ?? []);
     renderSimulationPositions(state.simulation?.positions ?? {});
     renderSimulationTrades(state.simulation?.trades ?? []);
     renderWallets(state.walletScores ?? []);
@@ -58,6 +60,7 @@ function renderMode(state) {
 
 function renderMetrics(state) {
   const latestSignal = (state.signals ?? [])[0];
+  const latestMaker = (state.makerCandidates ?? [])[0];
   const signalAgeMs = latestSignal ? Date.now() - latestSignal.sourceTimestamp : 0;
   const detectionLagMs = latestSignal ? latestSignal.detectedAt - latestSignal.sourceTimestamp : 0;
   const simPnl = state.simulation?.totalPnl ?? 0;
@@ -65,9 +68,12 @@ function renderMetrics(state) {
 
   document.getElementById("metrics").innerHTML = [
     metric("跟踪钱包", state.walletScores?.length ?? 0),
+    metric("做市候选", state.makerCandidates?.length ?? 0),
+    metric("最高做市评分", latestMaker ? formatter.format(latestMaker.score) : "-"),
+    metric("最高日奖励", latestMaker ? usd.format(latestMaker.dailyReward) : "-"),
     metric("信号数量", state.signals?.length ?? 0),
     metric("订单数量", state.orders?.length ?? 0),
-    metric("周期开始", state.cycleStartedAt ? new Date(state.cycleStartedAt).toLocaleTimeString() : "-"),
+    metric("周期开始", state.cycleStartedAt ? time(state.cycleStartedAt) : "-"),
     metric("今日名义金额", usd.format(state.risk?.notionalUsdc ?? 0)),
     metric("模拟权益", usd.format(state.simulation?.totalEquity ?? 0)),
     metric("模拟盈亏", signedUsd(simPnl), pnlClass(simPnl)),
@@ -76,6 +82,25 @@ function renderMetrics(state) {
     metric("上一信号距今", signalAgeMs ? `${formatter.format(signalAgeMs / 1000)} 秒` : "-"),
     metric("公开 API 延迟", detectionLagMs ? `${formatter.format(detectionLagMs / 1000)} 秒` : "-")
   ].join("");
+}
+
+function renderMakerCandidates(candidates) {
+  table(
+    "maker-candidates",
+    ["评分", "市场", "结果", "日奖励", "最大价差", "盘口", "建议 bid", "建议 ask", "建议规模", "标签/风险"],
+    candidates.slice(0, 80).map((candidate) => [
+      scorePill(candidate.score ?? 0),
+      text(candidate.title ?? "-"),
+      text(candidate.outcome ?? "-"),
+      usd.format(candidate.dailyReward ?? 0),
+      `${formatter.format(candidate.maxSpreadBps ?? 0)} bps`,
+      quoteText(candidate),
+      price(candidate.quotePlan?.bidPrice),
+      price(candidate.quotePlan?.askPrice),
+      usd.format(candidate.quotePlan?.quoteSizeUsdc ?? 0),
+      text([...(candidate.tags ?? []), ...(candidate.rejectReasons ?? [])].join("; "))
+    ])
+  );
 }
 
 function renderSimulationPositions(positionsByAsset) {
@@ -87,8 +112,8 @@ function renderSimulationPositions(positionsByAsset) {
       text(position.title ?? shortText(position.asset)),
       text(position.outcome ?? "-"),
       formatter.format(position.shares),
-      formatter.format(position.avgCost),
-      formatter.format(position.markPrice),
+      price(position.avgCost),
+      price(position.markPrice),
       usd.format(position.marketValue),
       colorMoney(position.unrealizedPnl)
     ])
@@ -100,11 +125,11 @@ function renderSimulationTrades(trades) {
     "sim-trades",
     ["时间", "方向", "市场", "份额", "价格", "金额", "已实现盈亏", "备注"],
     trades.slice(0, 50).map((trade) => [
-      new Date(trade.timestamp).toLocaleTimeString(),
+      time(trade.timestamp),
       sidePill(trade.side),
       text(trade.title ?? shortText(trade.asset)),
       formatter.format(trade.shares),
-      formatter.format(trade.price),
+      price(trade.price),
       usd.format(trade.notional),
       colorMoney(trade.realizedPnl),
       text(trade.skippedReason ?? "")
@@ -145,7 +170,7 @@ function renderSignals(signals) {
     "signals",
     ["发现时间", "方向", "评分", "来源钱包", "市场", "目标金额", "公开 API 延迟", "拒绝原因"],
     signals.slice(0, 50).map((signal) => [
-      new Date(signal.detectedAt).toLocaleTimeString(),
+      time(signal.detectedAt),
       sidePill(signal.side),
       scorePill(signal.signalScore ?? 0),
       short(signal.sourceWallet),
@@ -162,11 +187,11 @@ function renderOrders(orders) {
     "orders",
     ["时间", "方向", "Token", "数量/金额", "最差价格", "状态", "说明"],
     orders.slice(0, 50).map((order) => [
-      new Date(order.createdAt).toLocaleTimeString(),
+      time(order.createdAt),
       sidePill(order.side),
       short(order.asset),
       formatter.format(order.amount),
-      formatter.format(order.worstPrice),
+      price(order.worstPrice),
       statusPill(order.status),
       text(order.error ?? "")
     ])
@@ -203,6 +228,13 @@ function scorePill(score) {
   return `<span class="pill ${className}">${formatter.format(score)}</span>`;
 }
 
+function quoteText(candidate) {
+  const bid = candidate.bid ? price(candidate.bid) : "-";
+  const ask = candidate.ask ? price(candidate.ask) : "-";
+  const mid = candidate.mid ? price(candidate.mid) : "-";
+  return `${bid} / ${ask} · mid ${mid}`;
+}
+
 function colorMoney(value) {
   const className = pnlClass(value);
   return `<span class="${className}">${escapeHtml(signedUsd(value))}</span>`;
@@ -224,18 +256,30 @@ function shortText(value) {
 }
 
 function text(value) {
-  return escapeHtml(value);
+  return escapeHtml(value ?? "-");
 }
 
 function signedUsd(value) {
   const prefix = value > 0 ? "+" : "";
-  return `${prefix}${usd.format(value)}`;
+  return `${prefix}${usd.format(value ?? 0)}`;
 }
 
 function percent(value) {
-  return `${formatter.format(value * 100)}%`;
+  return `${formatter.format((value ?? 0) * 100)}%`;
+}
+
+function price(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? priceFormatter.format(numberValue) : "-";
+}
+
+function time(value) {
+  return value ? new Date(value).toLocaleTimeString() : "-";
 }
 
 function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]);
+  return String(value).replace(
+    /[&<>"']/g,
+    (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]
+  );
 }

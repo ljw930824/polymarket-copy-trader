@@ -28,6 +28,13 @@ export interface AppConfig {
   maxCopyPrice: number;
   minSignalScore: number;
   excludeSportsMarkets: boolean;
+  makerEnabled: boolean;
+  makerRefreshMs: number;
+  makerTopN: number;
+  makerMinDailyReward: number;
+  makerMaxSpreadBps: number;
+  makerMinScore: number;
+  makerQuoteSizeUsdc: number;
   simInitialCashUsdc: number;
   workerRunOnce: boolean;
   privateKey?: `0x${string}`;
@@ -112,6 +119,60 @@ export interface MarketQuote {
   bid?: number;
   ask?: number;
   last?: number;
+  updatedAt: number;
+}
+
+export interface RewardRate {
+  assetAddress: string;
+  dailyReward: number;
+}
+
+export interface RewardMarket {
+  conditionId: string;
+  question: string;
+  slug?: string;
+  marketSlug?: string;
+  active?: boolean;
+  closed?: boolean;
+  acceptingOrders?: boolean;
+  minSize: number;
+  maxSpread: number;
+  rates: RewardRate[];
+  tokens: Array<{
+    tokenId: string;
+    outcome: string;
+  }>;
+}
+
+export interface MakerQuotePlan {
+  asset: string;
+  outcome: string;
+  bidPrice: number;
+  askPrice: number;
+  minSize: number;
+  quoteSizeUsdc: number;
+  maxSpreadBps: number;
+  referenceMid: number;
+}
+
+export interface MakerCandidate {
+  id: string;
+  conditionId: string;
+  title: string;
+  slug?: string;
+  outcome: string;
+  asset: string;
+  dailyReward: number;
+  minSize: number;
+  maxSpread: number;
+  maxSpreadBps: number;
+  bid?: number;
+  ask?: number;
+  mid?: number;
+  score: number;
+  tags: string[];
+  rejectReasons: string[];
+  quotePlan: MakerQuotePlan;
   updatedAt: number;
 }
 
@@ -212,6 +273,7 @@ export interface AppState {
   mode: CopyMode;
   walletScores: WalletScore[];
   targetPositions: Position[];
+  makerCandidates: MakerCandidate[];
   quotes: Record<string, MarketQuote>;
   signals: CopySignal[];
   orders: CopyOrder[];

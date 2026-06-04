@@ -39,6 +39,7 @@ export function createEmptyState(mode: CopyMode): AppState {
     mode,
     walletScores: [],
     targetPositions: [],
+    makerCandidates: [],
     quotes: {},
     signals: [],
     orders: [],

@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Polymarket 跟单控制台</title>
-    <link rel="stylesheet" href="/styles.css?v=4" />
+    <title>Polymarket 策略控制台</title>
+    <link rel="stylesheet" href="/styles.css?v=5" />
   </head>
   <body>
     <main class="shell">
       <header class="hero" id="mode-card">
         <div>
-          <p class="eyebrow">Polymarket Copy Trader</p>
-          <h1>跟单控制台</h1>
+          <p class="eyebrow">Polymarket Strategy Lab</p>
+          <h1>策略控制台</h1>
           <p id="status" class="status">正在加载本地状态...</p>
         </div>
         <div class="mode-stack">
@@ -22,6 +22,7 @@
 
       <nav class="tabs" aria-label="Dashboard tabs">
         <button class="tab active" data-tab="overview">总览</button>
+        <button class="tab" data-tab="maker">做市奖励</button>
         <button class="tab" data-tab="signals">信号与订单</button>
         <button class="tab" data-tab="simulation">模拟盘</button>
         <button class="tab" data-tab="wallets">钱包与持仓</button>
@@ -29,20 +30,32 @@
 
       <section class="tab-panel active" id="tab-overview">
         <section class="explain overview-tone">
-          <div>
-            <h2>总览</h2>
-            <p>这里看系统是否在动、当前是 paper 还是 live、以及模拟盘整体收益。红色 live 才代表真实下单；蓝色 paper 只是模拟。</p>
-          </div>
+          <h2>总览</h2>
+          <p>这里看系统是否还在刷新、当前是 paper 还是 live、模拟盘收益、信号延迟和做市奖励机会。顶部蓝绿色表示模拟盘，红色表示实盘。</p>
         </section>
         <section class="grid metrics" id="metrics"></section>
       </section>
 
+      <section class="tab-panel" id="tab-maker">
+        <section class="explain maker-tone">
+          <h2>做市奖励观察</h2>
+          <p>紫色区域是官方 liquidity rewards 市场的观察器。它只做评分和被动 bid/ask 建议，不会自动挂真实 maker 单。做市奖励更前置，但风险来自库存、价格跳变、成交后单边暴露和规则变化。</p>
+        </section>
+        <section class="grid one">
+          <article class="maker-card">
+            <div class="section-head">
+              <h2>奖励市场 Top 候选</h2>
+              <span>按日奖励、最大价差、盘口可用性、市场类型和最小挂单综合评分</span>
+            </div>
+            <div id="maker-candidates" class="table"></div>
+          </article>
+        </section>
+      </section>
+
       <section class="tab-panel" id="tab-signals">
         <section class="explain signal-tone">
-          <div>
-            <h2>信号与订单</h2>
-            <p>橙色区域表示“跟单信号流”。公开 API 延迟指目标钱包成交时间到本地第一次从 activity 接口看到它的时间；它通常高于本机 1.5 秒轮询间隔。</p>
-          </div>
+          <h2>信号与订单</h2>
+          <p>橙色区域表示跟单信号流。公开 API 延迟是目标钱包成交时间到本地第一次从 activity 接口看到该事件的时间，这正是跟单滞后的核心来源。</p>
         </section>
         <section class="grid two">
           <article class="signal-card">
@@ -64,10 +77,8 @@
 
       <section class="tab-panel" id="tab-simulation">
         <section class="explain sim-tone">
-          <div>
-            <h2>模拟盘</h2>
-            <p>蓝色区域是模拟账户账本。它会用 paper 跟单产生的买卖记录计算现金、持仓、已实现盈亏、未实现盈亏、ROI 和最大回撤。</p>
-          </div>
+          <h2>模拟盘</h2>
+          <p>蓝色区域是模拟账户账本。它会用 paper 订单计算现金、持仓、已实现盈亏、未实现盈亏、ROI 和最大回撤。</p>
         </section>
         <section class="grid two">
           <article class="sim-card">
@@ -89,10 +100,8 @@
 
       <section class="tab-panel" id="tab-wallets">
         <section class="explain wallet-tone">
-          <div>
-            <h2>钱包与目标持仓</h2>
-            <p>绿色区域是策略输入。Top 钱包根据 PnL、ROI、成交量和当前持仓评分；目标持仓按 top 钱包仓位比例映射到你的本地预算。</p>
-          </div>
+          <h2>钱包与目标持仓</h2>
+          <p>绿色区域是跟单策略输入。Top 钱包根据 PnL、ROI、成交量和当前持仓评分；目标持仓按 top 钱包持仓比例映射到你的本地预算。</p>
         </section>
         <section class="grid two">
           <article class="wallet-card">
@@ -112,6 +121,6 @@
         </section>
       </section>
     </main>
-    <script src="/app.js?v=4"></script>
+    <script src="/app.js?v=5"></script>
   </body>
 </html>

@@ -14,6 +14,8 @@
   --sim-bg: #eaf3ff;
   --wallet: #168356;
   --wallet-bg: #eaf7f0;
+  --maker: #6941c6;
+  --maker-bg: #f3efff;
 }
 
 * {
@@ -189,6 +191,16 @@ article {
   border-left-color: var(--wallet);
 }
 
+.maker-tone,
+.maker-card {
+  background: var(--maker-bg);
+  border-color: #d6bbfb;
+}
+
+.maker-tone {
+  border-left-color: var(--maker);
+}
+
 .grid {
   display: grid;
   gap: 16px;
@@ -201,6 +213,10 @@ article {
 
 .two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.one {
+  grid-template-columns: 1fr;
 }
 
 .metric {
@@ -279,6 +295,11 @@ td {
   white-space: nowrap;
 }
 
+td:nth-child(2) {
+  max-width: 420px;
+  white-space: normal;
+}
+
 th {
   background: rgba(255, 255, 255, 0.85);
   color: var(--text-muted);
@@ -333,7 +354,8 @@ th {
 
 @media (max-width: 900px) {
   .metrics,
-  .two {
+  .two,
+  .one {
     grid-template-columns: 1fr;
   }
 

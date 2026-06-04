@@ -77,7 +77,7 @@ export function prepareOrderWithStrategyGuards(
   return order;
 }
 
-function isSportsMarket(value: string): boolean {
+export function isSportsMarket(value: string): boolean {
   return /\b(vs\.?|atp|wta|nba|nfl|nhl|mlb|ufc|mma|soccer|football|basketball|baseball|hockey|tennis|golf|f1|formula|league of legends|lol|cs2|dota|valorant|game handicap|spread|total games|o\/u)\b/i.test(
     value
   );

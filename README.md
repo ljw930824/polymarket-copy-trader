@@ -1,19 +1,11 @@
-# Polymarket 跟单控制台
+# Polymarket 策略控制台
 
-这是一个本地运行的 Polymarket 跟单与模拟盘工具。它会筛选盈利能力较强的钱包，监听这些钱包的公开交易活动，按 top 钱包持仓比例生成跟单信号，并在本地 dashboard 中展示信号、订单、模拟盘收益和策略表现。
+这是一个本地运行的 Polymarket 策略研究工具。它现在包含两条独立能力：
 
-默认运行在 `paper` 模式，不会真实下单。切换到 `live` 之前，请先确认 geoblock、钱包余额、API 凭证、滑点和风控配置。
+- 跟单观察：筛选 PnL、ROI、成交量较强的钱包，监听公开 activity，生成跟单信号和 paper/live 订单。
+- 做市奖励观察：读取 Polymarket CLOB 的 reward-eligible markets，按日奖励、最大价差、最小挂单、盘口和风险标签做评分，给出被动 bid/ask 建议。
 
-## 当前能力
-
-- 根据 leaderboard、PnL、ROI、成交量和当前持仓筛选 top 钱包。
-- 支持 `COPY_TOP_N` 配置，例如 top3、top5。
-- 高频轮询目标钱包公开 activity，生成 BUY/SELL 跟单信号。
-- 使用 Market WebSocket 缓存目标 token 的盘口价格。
-- 支持 paper 模式和 live 模式。
-- paper 模式会进入模拟盘，计算现金、持仓、已实现盈亏、未实现盈亏、ROI、最大回撤。
-- dashboard 使用 tab 区分总览、信号与订单、模拟盘、钱包与持仓。
-- 所有状态写入本地 `data/state.json`，不会上传到仓库。
+默认运行在 `paper` 模式，不会真实下单。做市奖励模块目前只做观察和评分，不会自动提交 maker 挂单。
 
 ## 安装
 
@@ -38,16 +30,10 @@ npm run worker
 npm run dashboard
 ```
 
-只运行一轮 worker，用于检查 API、筛选逻辑和状态写入：
+只跑一轮 worker，用于检查 API 和状态写入：
 
 ```powershell
 npm run worker:once
-```
-
-归档当前账本并开启新的模拟盘周期：
-
-```powershell
-npm run cycle:reset
 ```
 
 打开 dashboard：
@@ -56,18 +42,37 @@ npm run cycle:reset
 http://localhost:8787
 ```
 
-## 配置说明
+## 新开模拟盘周期
+
+归档历史账本并重置模拟盘：
+
+```powershell
+npm run cycle:reset
+```
+
+该命令会把 `data/state.json` 归档到 `data/archives/`，然后清空 signals、orders、risk 和 simulation，并写入新的 `cycleStartedAt`。
+
+## 核心配置
 
 配置文件是本地 `.env`，不要提交到 GitHub。
-
-核心配置：
 
 ```text
 COPY_MODE=paper
 COPY_TOP_N=3
 COPY_TOTAL_BUDGET_USDC=100
 POLL_INTERVAL_MS=1500
+LEADERBOARD_REFRESH_MS=300000
 ACTIVITY_LIMIT=25
+
+MIN_WALLET_PNL=0
+MIN_WALLET_VOLUME=1000
+MIN_POSITION_VALUE_USDC=1
+MAX_POSITION_VALUE_USDC=35
+
+MAX_SINGLE_ORDER_USDC=15
+MAX_DAILY_ORDER_COUNT=100
+MAX_DAILY_NOTIONAL_USDC=500
+MAX_SLIPPAGE_BPS=250
 SIGNAL_STALE_MS=120000
 MAX_SIGNAL_API_DELAY_MS=30000
 MAX_ASSET_EXPOSURE_USDC=20
@@ -76,36 +81,59 @@ MIN_COPY_PRICE=0.05
 MAX_COPY_PRICE=0.85
 MIN_SIGNAL_SCORE=60
 EXCLUDE_SPORTS_MARKETS=true
+
+MAKER_ENABLED=true
+MAKER_REFRESH_MS=180000
+MAKER_TOP_N=20
+MAKER_MIN_DAILY_REWARD=1
+MAKER_MAX_SPREAD_BPS=500
+MAKER_MIN_SCORE=30
+MAKER_QUOTE_SIZE_USDC=20
+
 SIM_INITIAL_CASH_USDC=100
-MAX_SLIPPAGE_BPS=250
-MAX_SINGLE_ORDER_USDC=15
-MAX_DAILY_ORDER_COUNT=100
-MAX_DAILY_NOTIONAL_USDC=500
 ```
 
-含义：
+## 做市奖励配置
 
-- `COPY_MODE=paper`：模拟盘，不真实下单。
-- `COPY_MODE=live`：真实下单，需要配置私钥和 Polymarket API 凭证。
-- `COPY_TOP_N`：跟踪 top 几个钱包。
-- `COPY_TOTAL_BUDGET_USDC`：跟单总预算。
-- `POLL_INTERVAL_MS`：公开 activity 轮询间隔。
-- `SIGNAL_STALE_MS`：信号最大可接受陈旧时间。
-- `MAX_SIGNAL_API_DELAY_MS`：公开 API 延迟超过该值的信号不执行。
-- `MAX_ASSET_EXPOSURE_USDC`：单个 token/市场最大模拟敞口。
-- `MARKET_COOLDOWN_MS`：同一市场连续 BUY 的冷却时间。
-- `MIN_COPY_PRICE` / `MAX_COPY_PRICE`：BUY 价格过滤，避免追太低或太高的赔率。
-- `MIN_SIGNAL_SCORE`：信号评分低于该值则跳过。
-- `EXCLUDE_SPORTS_MARKETS`：默认排除体育、电竞、临场高波动市场。
-- `SIM_INITIAL_CASH_USDC`：模拟盘初始资金。
-- `MAX_SLIPPAGE_BPS`：最大滑点，250 表示 2.5%。
-- `MAX_SINGLE_ORDER_USDC`：单笔最大跟单金额。
-- `MAX_DAILY_ORDER_COUNT`：每日最大订单数。
-- `MAX_DAILY_NOTIONAL_USDC`：每日最大名义成交金额。
+- `MAKER_ENABLED`：是否启用做市奖励观察器。
+- `MAKER_REFRESH_MS`：刷新官方 reward markets 的间隔。
+- `MAKER_TOP_N`：dashboard 展示多少个做市候选。
+- `MAKER_MIN_DAILY_REWARD`：过滤日奖励太低的市场。
+- `MAKER_MAX_SPREAD_BPS`：只保留最大允许价差不超过该值的市场，500 表示 5%。
+- `MAKER_MIN_SCORE`：低于该评分的候选不展示。
+- `MAKER_QUOTE_SIZE_USDC`：生成建议挂单规模时使用的本地参考金额。
+
+做市评分考虑：
+
+- 日奖励越高越好。
+- 官方允许价差越窄越好。
+- 有实时 bid/ask 盘口比没有盘口更可靠。
+- 最小挂单要求过高会扣分。
+- 体育、电竞、临场强波动市场默认大幅扣分并过滤。
+- 市场关闭、不活跃、不接受订单会扣分并过滤。
+
+## Dashboard 颜色含义
+
+- 顶部蓝绿色：`paper` 模式，只模拟，不真实下单。
+- 顶部红色：`live` 模式，会尝试真实下单。
+- 紫色：做市奖励观察。
+- 橙色：跟单信号与订单。
+- 蓝色：模拟盘账本。
+- 绿色：钱包筛选和目标持仓。
+
+## 跟单延迟说明
+
+Polymarket 官方 user WebSocket 只能推送当前账户自己的订单和成交，不能订阅别人的钱包成交。本工具跟单部分通过公开 Data API `/activity` 高频轮询目标钱包交易，因此 dashboard 中的“公开 API 延迟”表示：
+
+```text
+目标钱包成交时间 -> 本地第一次从公开 activity API 看到该事件的时间
+```
+
+即使 `POLL_INTERVAL_MS=1500`，公开 API 本身也可能晚十几秒或几十秒才出现目标钱包成交。这也是单纯跟单容易滞后的原因。
 
 ## Live 模式凭证
 
-真实下单前，需要在本地 `.env` 里填写：
+真实下单前，需要在本地 `.env` 填写：
 
 ```text
 PRIVATE_KEY=0x...
@@ -121,128 +149,34 @@ COPY_MODE=live
 
 - 不要提交 `.env`。
 - 不要把私钥、API secret、passphrase 写入 README、issue、commit message 或截图。
-- `.env.example` 只能保留占位符。
+- `.env.example` 只能保留空占位符。
 - `data/state.json` 是本地运行状态，不提交。
 - `node_modules` 不提交。
 
-## Dashboard 说明
-
-dashboard 分成四个 tab：
-
-- `总览`：系统是否在运行、paper/live 模式、模拟盘收益、公开 API 延迟。
-- `信号与订单`：目标钱包 BUY/SELL 信号，以及本工具生成的订单。
-- `模拟盘`：模拟账户持仓、成交流水、PnL、ROI、最大回撤。
-- `钱包与持仓`：当前 top 钱包，以及按钱包持仓比例换算出的目标持仓。
-
-颜色语义：
-
-- 顶部蓝绿色：`paper` 模式，只模拟，不真实下单。
-- 顶部红色：`live` 模式，会尝试真实下单。
-- 橙色：信号与订单。
-- 蓝色：模拟盘。
-- 绿色：钱包和目标持仓。
-
-## 延迟说明
-
-Polymarket 官方 `user` WebSocket 只能推送当前账户自己的订单和成交，不能订阅别人的钱包成交。
-
-本工具目前通过公开 Data API `/activity` 高频轮询目标钱包交易，因此 dashboard 上的 `公开 API 延迟` 指的是：
-
-```text
-目标钱包成交时间 -> 本地第一次从公开 activity API 看到该事件的时间
-```
-
-这个延迟通常高于本机轮询间隔。即使 `POLL_INTERVAL_MS=1500`，公开 activity API 本身也可能晚十几秒或几十秒才出现目标钱包成交。
-
-## 模拟盘与回归测试
-
-paper 模式下，订单不会提交到 Polymarket，而是进入本地模拟账户：
-
-- BUY：扣除现金，增加 token 持仓。
-- SELL：卖出已有持仓，计算已实现盈亏。
-- 如果没有持仓却收到 SELL，会记录跳过原因，不会产生负仓位。
-- 持仓会按最新盘口或目标价进行 mark-to-market。
-
-运行测试：
+## 测试
 
 ```powershell
-npm test
 npm run typecheck
+npm test
+node --check public\app.js
 ```
 
-测试覆盖：
+当前测试覆盖：
 
 - top 钱包评分和筛选。
 - 跟单信号去重。
-- 模拟盘买入、部分卖出、已实现盈亏、未实现盈亏、ROI、最大回撤。
-- 无持仓卖出不会产生负仓位。
-
-## 策略风控
-
-当前执行前会做一轮信号评分和订单过滤：
-
-- 排除体育、电竞、临场盘，避免公开 API 延迟导致追高。
-- 如果公开 API 延迟超过 `MAX_SIGNAL_API_DELAY_MS`，跳过。
-- 如果 BUY 价格高于 `MAX_COPY_PRICE` 或低于 `MIN_COPY_PRICE`，跳过。
-- 同一个市场在 `MARKET_COOLDOWN_MS` 内不重复追买。
-- 单个 token/市场敞口超过 `MAX_ASSET_EXPOSURE_USDC` 后不再继续买入。
-- dashboard 会显示信号评分和拒绝原因，便于复盘。
-
-## 开新模拟盘周期
-
-如果历史模拟盘已经被旧策略污染，可以开启新周期：
-
-```powershell
-npm run cycle:reset
-```
-
-这个命令会：
-
-- 把当前 `data/state.json` 归档到 `data/archives/`。
-- 清空 signals、orders、risk 和 simulation。
-- 重置模拟盘初始资金为 `SIM_INITIAL_CASH_USDC`。
-- 写入新的 `cycleStartedAt`。
-- worker 只接收周期开始之后的目标钱包 activity。
-
-`data/` 已被 `.gitignore` 忽略，归档账本不会提交到 GitHub。
-
-## GitHub 提交安全清单
-
-提交前请检查：
-
-```powershell
-git status --short
-git diff --cached
-```
-
-确认不会提交：
-
-- `.env`
-- 私钥
-- API secret
-- passphrase
-- `data/state.json`
-- `node_modules`
-
-当前 `.gitignore` 已忽略这些运行产物：
-
-```text
-node_modules/
-dist/
-.env
-data/
-*.log
-```
+- 模拟盘买入、卖出、PnL、ROI、最大回撤。
+- 做市奖励候选评分、体育市场过滤、价差单位换算。
 
 ## 官方 API 来源
 
-- Leaderboard：`GET https://data-api.polymarket.com/v1/leaderboard`
-- Positions：`GET https://data-api.polymarket.com/positions`
-- Activity：`GET https://data-api.polymarket.com/activity`
+- Data API leaderboard：`GET https://data-api.polymarket.com/v1/leaderboard`
+- Data API positions：`GET https://data-api.polymarket.com/positions`
+- Data API activity：`GET https://data-api.polymarket.com/activity`
+- CLOB reward markets：`GET https://clob.polymarket.com/sampling-markets`
 - Market WebSocket：`wss://ws-subscriptions-clob.polymarket.com/ws/market`
 - CLOB SDK：`@polymarket/clob-client-v2`
-- Geoblock：`GET https://polymarket.com/api/geoblock`
 
 ## 免责声明
 
-这只是自动化工具和策略研究代码，不构成投资建议。真实下单前，请自行确认所在地区的合规限制、Polymarket 账户状态、资金风险和策略表现。
+这只是自动化工具和策略研究代码，不构成投资建议。真实下单前，请自行确认所在地合规限制、Polymarket 账户状态、资金风险、盘口流动性和策略表现。

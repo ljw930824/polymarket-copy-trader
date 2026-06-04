@@ -29,6 +29,13 @@ const config = {
   maxCopyPrice: 0.85,
   minSignalScore: 60,
   excludeSportsMarkets: true,
+  makerEnabled: true,
+  makerRefreshMs: 180000,
+  makerTopN: 20,
+  makerMinDailyReward: 1,
+  makerMaxSpreadBps: 350,
+  makerMinScore: 55,
+  makerQuoteSizeUsdc: 5,
   simInitialCashUsdc: 100,
   workerRunOnce: false,
   polySignatureType: 3

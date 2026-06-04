@@ -20,6 +20,7 @@ export class MarketWsCache {
 
     this.ws = new WebSocket(this.wsUrl);
     this.ws.on("open", () => {
+      if (this.ws?.readyState !== WebSocket.OPEN) return;
       this.sendSubscription([...this.subscribed]);
       this.heartbeat = setInterval(() => this.ws?.send("PING"), 10_000);
     });
@@ -33,7 +34,7 @@ export class MarketWsCache {
     for (const assetId of fresh) this.subscribed.add(assetId);
     if (fresh.length === 0) return;
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ operation: "subscribe", assets_ids: fresh, custom_feature_enabled: true }));
+      this.send({ operation: "subscribe", assets_ids: fresh, custom_feature_enabled: true });
     } else {
       this.connect([...this.subscribed]);
     }
@@ -53,7 +54,12 @@ export class MarketWsCache {
   }
 
   private sendSubscription(assetIds: string[]): void {
-    this.ws?.send(JSON.stringify({ assets_ids: assetIds, type: "market", custom_feature_enabled: true }));
+    this.send({ assets_ids: assetIds, type: "market", custom_feature_enabled: true });
+  }
+
+  private send(payload: unknown): void {
+    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    this.ws.send(JSON.stringify(payload));
   }
 
   private handleMessage(raw: string): void {

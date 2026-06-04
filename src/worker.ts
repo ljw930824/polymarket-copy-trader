@@ -2,8 +2,9 @@ import pino from "pino";
 import { loadConfig } from "./shared/config.js";
 import { sleep } from "./shared/http.js";
 import { createEmptyState, JsonStateStore } from "./shared/store.js";
-import type { ActivityEvent, AppState, Position } from "./shared/types.js";
+import type { ActivityEvent, AppState, Position, RewardMarket } from "./shared/types.js";
 import { DataApiClient } from "./polymarket/dataApi.js";
+import { ClobApiClient } from "./polymarket/clobApi.js";
 import { MarketWsCache } from "./polymarket/marketWs.js";
 import { OrderExecutor } from "./polymarket/clob.js";
 import { flattenTargetPositions, scoreWallets } from "./services/scoring.js";
@@ -15,12 +16,14 @@ import {
   rebuildSimulationFromHistory
 } from "./services/simulator.js";
 import { prepareOrderWithStrategyGuards } from "./services/strategyGuards.js";
+import { scoreMakerCandidates } from "./services/marketMaking.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
 async function main(): Promise<void> {
   const config = loadConfig();
   const dataApi = new DataApiClient(config.dataApiBase);
+  const clobApi = new ClobApiClient(config.clobHost);
   const store = new JsonStateStore();
   const executor = new OrderExecutor(config);
   const marketWs = new MarketWsCache(config.marketWsUrl);
@@ -39,6 +42,8 @@ async function main(): Promise<void> {
     );
   }
   let lastLeaderboardRefresh = 0;
+  let lastMakerRefresh = 0;
+  let rewardMarkets: RewardMarket[] = [];
 
   if (config.mode === "live") {
     const geo = await dataApi.geoblock();
@@ -67,6 +72,14 @@ async function main(): Promise<void> {
         logger.info({ wallets: state.walletScores.map((wallet) => wallet.wallet) }, "wallet set refreshed");
       }
 
+      if (config.makerEnabled && Date.now() - lastMakerRefresh >= config.makerRefreshMs) {
+        rewardMarkets = await clobApi.samplingMarkets();
+        const rewardAssets = rewardMarkets.flatMap((market) => market.tokens.map((token) => token.tokenId));
+        marketWs.subscribe(rewardAssets);
+        lastMakerRefresh = Date.now();
+        logger.info({ markets: rewardMarkets.length, assets: rewardAssets.length }, "maker reward markets refreshed");
+      }
+
       const events = await loadActivity(dataApi, state.walletScores.map((wallet) => wallet.wallet), config.activityLimit);
       const signals = engine.signalsFromActivities(config, state.walletScores, events, state.cycleStartedAt);
       for (const signal of signals) {
@@ -85,6 +98,7 @@ async function main(): Promise<void> {
         logger.info({ signal: signal.id, status: order.status, mode: config.mode }, "copy order processed");
       }
       state.quotes = marketWs.snapshot();
+      state.makerCandidates = config.makerEnabled ? scoreMakerCandidates(config, rewardMarkets, state.quotes) : [];
       state.simulation = markSimulation(state.simulation, state.quotes, state.targetPositions);
       state.lastError = undefined;
       await store.write(state);
