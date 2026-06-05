@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Polymarket 策略控制台</title>
-    <link rel="stylesheet" href="/styles.css?v=7" />
+    <link rel="stylesheet" href="/styles.css?v=8" />
   </head>
   <body>
     <main class="shell">
@@ -32,7 +32,26 @@
       <section class="tab-panel active" id="tab-overview">
         <section class="explain overview-tone">
           <h2>总览</h2>
-          <p>这里看系统是否还在刷新、当前是 paper 还是 live、模拟盘收益、信号延迟和做市奖励机会。顶部蓝绿色表示模拟盘，红色表示实盘。</p>
+          <p>这里看系统是否还在刷新、当前是 paper 还是 live、模拟盘收益、信号延迟和做市奖励机会。顶部蓝绿色表示模拟盘，红色表示实盘。当前 PnL 默认不是你的真实账户收益。</p>
+        </section>
+        <section class="ledger-note">
+          <article>
+            <h2>账本口径</h2>
+            <div class="ledger-grid">
+              <div>
+                <strong>跟单模拟PnL</strong>
+                <span>本地 paper 订单和标记价计算，只用于回测。</span>
+              </div>
+              <div>
+                <strong>做市估算PnL</strong>
+                <span>本地 maker 模拟 + 奖励捕获率估算，不等于已领取奖励。</span>
+              </div>
+              <div>
+                <strong>真实账户PnL</strong>
+                <span>当前未接入；真金投入后单独读取账户持仓、成交和余额。</span>
+              </div>
+            </div>
+          </article>
         </section>
         <section class="grid metrics" id="metrics"></section>
       </section>
@@ -57,7 +76,7 @@
       <section class="tab-panel" id="tab-maker">
         <section class="explain maker-tone">
           <h2>做市奖励观察</h2>
-          <p>紫色区域是官方 liquidity rewards 市场的策略实验台。它会观察奖励市场、生成被动 bid/ask 计划，并用本地 paper 账本模拟库存、成交、预计奖励和回撤；不会自动挂真实 maker 单。</p>
+          <p>紫色区域是官方 liquidity rewards 市场的策略实验台。它会观察奖励市场、生成被动 bid/ask 计划，并用本地 paper 账本模拟库存、成交、估算奖励和回撤；不会自动挂真实 maker 单。</p>
         </section>
         <section class="grid metrics maker-metrics" id="maker-metrics"></section>
         <section class="grid one">
@@ -92,7 +111,7 @@
           <article class="maker-card">
             <div class="section-head">
               <h2>做市权益快照</h2>
-              <span>每轮 worker 记录的候选数、活跃盘口、预计奖励和权益曲线</span>
+              <span>每轮 worker 记录的候选数、活跃盘口、估算奖励和权益曲线</span>
             </div>
             <div id="maker-snapshots" class="table"></div>
           </article>
@@ -168,6 +187,6 @@
         </section>
       </section>
     </main>
-    <script src="/app.js?v=7"></script>
+    <script src="/app.js?v=8"></script>
   </body>
 </html>

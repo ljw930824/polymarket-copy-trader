@@ -111,13 +111,15 @@ function renderMetrics(state) {
     metric("做市候选", state.makerCandidates?.length ?? 0),
     metric("最高做市评分", latestMaker ? formatter.format(latestMaker.score) : "-"),
     metric("最高日奖励", latestMaker ? usd.format(latestMaker.dailyReward) : "-"),
-    metric("做市实验盈亏", signedUsd(makerPnl), pnlClass(makerPnl)),
+    metric("做市估算PnL", signedUsd(makerPnl), pnlClass(makerPnl)),
+    metric("真实账户PnL", "未接入"),
+    metric("PnL口径", state.mode === "live" ? "LIVE订单/账户待接入" : "PAPER模拟/奖励估算"),
     metric("信号数量", state.signals?.length ?? 0),
     metric("订单数量", state.orders?.length ?? 0),
     metric("周期开始", state.cycleStartedAt ? time(state.cycleStartedAt) : "-"),
     metric("今日名义金额", usd.format(state.risk?.notionalUsdc ?? 0)),
-    metric("跟单模拟权益", usd.format(state.simulation?.totalEquity ?? 0)),
-    metric("跟单模拟盈亏", signedUsd(simPnl), pnlClass(simPnl)),
+    metric("跟单模拟权益", `${usd.format(state.simulation?.totalEquity ?? 0)} PAPER`),
+    metric("跟单模拟PnL", signedUsd(simPnl), pnlClass(simPnl)),
     metric("跟单模拟 ROI", percent(state.simulation?.roi ?? 0), pnlClass(state.simulation?.roi ?? 0)),
     metric("上一信号距今", signalAgeMs ? `${formatter.format(signalAgeMs / 1000)} 秒` : "-"),
     metric("公开 API 延迟", detectionLagMs ? `${formatter.format(detectionLagMs / 1000)} 秒` : "-")
@@ -128,13 +130,13 @@ function renderMakerMetrics(simulation, candidates) {
   const activeQuoteCount = (candidates ?? []).filter((candidate) => candidate.bid && candidate.ask).length;
   const latestSnapshot = simulation?.snapshots?.[0];
   document.getElementById("maker-metrics").innerHTML = [
-    metric("做市权益", usd.format(simulation?.totalEquity ?? 0)),
-    metric("做市总盈亏", signedUsd(simulation?.totalPnl ?? 0), pnlClass(simulation?.totalPnl ?? 0)),
+    metric("做市估算权益", `${usd.format(simulation?.totalEquity ?? 0)} PAPER`),
+    metric("做市估算PnL", signedUsd(simulation?.totalPnl ?? 0), pnlClass(simulation?.totalPnl ?? 0)),
     metric("做市 ROI", percent(simulation?.roi ?? 0), pnlClass(simulation?.roi ?? 0)),
     metric("现金", usd.format(simulation?.cash ?? 0)),
     metric("库存市值", usd.format(simulation?.inventoryValue ?? 0)),
-    metric("预计已获奖励", usd.format(simulation?.accruedReward ?? 0)),
-    metric("预计日奖励", usd.format(latestSnapshot?.estimatedDailyReward ?? 0)),
+    metric("估算已获奖励", usd.format(simulation?.accruedReward ?? 0)),
+    metric("估算日奖励", usd.format(latestSnapshot?.estimatedDailyReward ?? 0)),
     metric("活跃盘口", `${activeQuoteCount}/${candidates.length}`),
     metric("模拟成交", simulation?.trades?.length ?? 0),
     metric("最大回撤", percent(simulation?.maxDrawdown ?? 0), "negative")
@@ -183,7 +185,7 @@ function renderMakerPositions(positionsByAsset) {
   const positions = Object.values(positionsByAsset).sort((a, b) => b.marketValue - a.marketValue);
   table(
     "maker-positions",
-    ["市场", "结果", "份额", "成本均价", "标记价", "库存市值", "未实现盈亏", "评分", "日奖励"],
+    ["市场", "结果", "份额", "成本均价", "标记价", "模拟库存市值", "模拟未实现PnL", "评分", "日奖励"],
     positions.slice(0, 80).map((position) => [
       text(position.title ?? shortText(position.asset)),
       text(position.outcome ?? "-"),
@@ -218,7 +220,7 @@ function renderArbitrageOpportunities(opportunities) {
 function renderMakerTrades(trades) {
   table(
     "maker-trades",
-    ["时间", "方向", "市场", "结果", "份额", "价格", "金额", "已实现盈亏", "原因"],
+    ["时间", "方向", "市场", "结果", "份额", "价格", "金额", "模拟已实现PnL", "原因"],
     trades.slice(0, 80).map((trade) => [
       time(trade.timestamp),
       sidePill(trade.side),
@@ -236,7 +238,7 @@ function renderMakerTrades(trades) {
 function renderMakerSnapshots(snapshots) {
   table(
     "maker-snapshots",
-    ["时间", "候选", "活跃盘口", "Top评分", "预计日奖励", "累计奖励", "现金", "库存", "权益", "ROI"],
+    ["时间", "候选", "活跃盘口", "Top评分", "估算日奖励", "估算累计奖励", "现金", "模拟库存", "估算权益", "估算ROI"],
     snapshots.slice(0, 80).map((snapshot) => [
       time(snapshot.timestamp),
       formatter.format(snapshot.candidateCount),
@@ -256,7 +258,7 @@ function renderSimulationPositions(positionsByAsset) {
   const positions = Object.values(positionsByAsset).sort((a, b) => b.marketValue - a.marketValue);
   table(
     "sim-positions",
-    ["市场", "结果", "份额", "成本均价", "标记价", "市值", "未实现盈亏"],
+    ["市场", "结果", "份额", "成本均价", "标记价", "模拟市值", "模拟未实现PnL"],
     positions.slice(0, 50).map((position) => [
       text(position.title ?? shortText(position.asset)),
       text(position.outcome ?? "-"),
@@ -272,7 +274,7 @@ function renderSimulationPositions(positionsByAsset) {
 function renderSimulationTrades(trades) {
   table(
     "sim-trades",
-    ["时间", "方向", "市场", "份额", "价格", "金额", "已实现盈亏", "备注"],
+    ["时间", "方向", "市场", "份额", "价格", "金额", "模拟已实现PnL", "备注"],
     trades.slice(0, 50).map((trade) => [
       time(trade.timestamp),
       sidePill(trade.side),
@@ -289,7 +291,7 @@ function renderSimulationTrades(trades) {
 function renderWallets(wallets) {
   table(
     "wallets",
-    ["排名", "钱包", "PnL", "ROI", "当前价值", "评分"],
+    ["排名", "钱包", "公开PnL", "公开ROI", "公开当前价值", "评分"],
     wallets.map((wallet) => [
       wallet.rank,
       short(wallet.wallet),
