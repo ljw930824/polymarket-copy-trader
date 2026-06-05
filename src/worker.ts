@@ -18,6 +18,7 @@ import {
 import { prepareOrderWithStrategyGuards } from "./services/strategyGuards.js";
 import { findArbitrageOpportunities, scoreMakerCandidates, selectStrategyCandidates } from "./services/marketMaking.js";
 import { ensureMakerSimulation, updateMakerSimulation } from "./services/makerSimulator.js";
+import { buildOpportunityCenter } from "./services/opportunityCenter.js";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
@@ -120,6 +121,9 @@ async function main(): Promise<void> {
         }
       }
       state.arbitrageOpportunities = config.makerEnabled ? findArbitrageOpportunities(state.makerCandidates, state.quotes) : [];
+      state.opportunityCenter = config.makerEnabled
+        ? buildOpportunityCenter(config, state.makerCandidates, state.arbitrageOpportunities, state.signals)
+        : [];
       state.makerSimulation = config.makerEnabled
         ? updateMakerSimulation(config, state.makerSimulation, selectStrategyCandidates(config, state.makerCandidates), state.quotes)
         : state.makerSimulation;
@@ -145,15 +149,27 @@ async function main(): Promise<void> {
 }
 
 async function loadPositions(dataApi: DataApiClient, wallets: string[]): Promise<Map<string, Position[]>> {
-  const entries = await Promise.all(
-    wallets.map(async (wallet) => [wallet.toLowerCase(), await dataApi.positions(wallet)] as const)
-  );
+  const entries = await mapLimit(wallets, 8, async (wallet) => [wallet.toLowerCase(), await dataApi.positions(wallet)] as const);
   return new Map(entries);
 }
 
 async function loadActivity(dataApi: DataApiClient, wallets: string[], limit: number): Promise<ActivityEvent[]> {
-  const nested = await Promise.all(wallets.map((wallet) => dataApi.activity(wallet, limit)));
+  const nested = await mapLimit(wallets, 6, async (wallet) => dataApi.activity(wallet, limit));
   return nested.flat();
+}
+
+async function mapLimit<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 function uniqueAssets(positions: Position[]): string[] {

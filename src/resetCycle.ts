@@ -24,6 +24,7 @@ async function main(): Promise<void> {
     cycleStartedAt: now,
     signals: [],
     orders: [],
+    opportunityCenter: [],
     risk: emptyRisk(),
     simulation: createSimulationState(config.simInitialCashUsdc),
     makerSimulation: createMakerSimulationState(config.makerSimInitialCashUsdc),

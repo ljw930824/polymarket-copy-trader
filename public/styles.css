@@ -243,6 +243,20 @@ article {
   border-color: rgba(167, 139, 250, 0.34);
 }
 
+.opportunity-tone,
+.opportunity-card {
+  border-color: rgba(35, 211, 238, 0.38);
+}
+
+.opportunity-tone {
+  border-left-color: var(--cyan);
+}
+
+.opportunity-metrics .metric {
+  background: linear-gradient(180deg, rgba(16, 36, 45, 0.96), rgba(7, 14, 22, 0.98));
+  border-color: rgba(35, 211, 238, 0.24);
+}
+
 .maker-tone {
   border-left-color: var(--purple);
 }

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Polymarket 策略控制台</title>
-    <link rel="stylesheet" href="/styles.css?v=6" />
+    <link rel="stylesheet" href="/styles.css?v=7" />
   </head>
   <body>
     <main class="shell">
@@ -22,6 +22,7 @@
 
       <nav class="tabs" aria-label="Dashboard tabs">
         <button class="tab active" data-tab="overview">总览</button>
+        <button class="tab" data-tab="opportunities">机会中心</button>
         <button class="tab" data-tab="maker">做市奖励</button>
         <button class="tab" data-tab="signals">信号与订单</button>
         <button class="tab" data-tab="simulation">模拟盘</button>
@@ -34,6 +35,23 @@
           <p>这里看系统是否还在刷新、当前是 paper 还是 live、模拟盘收益、信号延迟和做市奖励机会。顶部蓝绿色表示模拟盘，红色表示实盘。</p>
         </section>
         <section class="grid metrics" id="metrics"></section>
+      </section>
+
+      <section class="tab-panel" id="tab-opportunities">
+        <section class="explain opportunity-tone">
+          <h2>机会中心</h2>
+          <p>这里把做市奖励、互补套利和跟单信号统一分成可执行、观察和禁止三层。可执行只代表通过当前本地策略过滤，实盘前仍需要用模拟成交、奖励捕获率和滑点继续验证。</p>
+        </section>
+        <section class="grid metrics opportunity-metrics" id="opportunity-metrics"></section>
+        <section class="grid one">
+          <article class="opportunity-card">
+            <div class="section-head">
+              <h2>机会列表</h2>
+              <span>按层级、评分和更新时间排序；做市机会来自官方奖励市场，套利机会来自 Yes/No 合计价格，跟单机会主要用于风险排除</span>
+            </div>
+            <div id="opportunity-center" class="table"></div>
+          </article>
+        </section>
       </section>
 
       <section class="tab-panel" id="tab-maker">
@@ -150,6 +168,6 @@
         </section>
       </section>
     </main>
-    <script src="/app.js?v=6"></script>
+    <script src="/app.js?v=7"></script>
   </body>
 </html>

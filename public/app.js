@@ -25,6 +25,7 @@ async function refresh() {
         )} · dashboard ${time(state.servedAt)}`;
 
     renderMetrics(state);
+    renderOpportunityCenter(state.opportunityCenter ?? []);
     renderMakerMetrics(state.makerSimulation, state.makerCandidates ?? []);
     renderMakerCandidates(state.makerCandidates ?? []);
     renderMakerPositions(state.makerSimulation?.positions ?? {});
@@ -42,6 +43,40 @@ async function refresh() {
       error instanceof Error ? error.message : String(error)
     )}</span>`;
   }
+}
+
+function renderOpportunityCenter(opportunities) {
+  const executeCount = opportunities.filter((item) => item.tier === "execute").length;
+  const watchCount = opportunities.filter((item) => item.tier === "watch").length;
+  const avoidCount = opportunities.filter((item) => item.tier === "avoid").length;
+  const best = opportunities[0];
+
+  document.getElementById("opportunity-metrics").innerHTML = [
+    metric("可执行机会", executeCount, executeCount ? "positive" : ""),
+    metric("观察机会", watchCount),
+    metric("禁止机会", avoidCount, avoidCount ? "negative" : ""),
+    metric("最高机会分", best ? formatter.format(best.score ?? 0) : "-"),
+    metric("最高机会来源", best ? sourceText(best.source) : "-"),
+    metric("最高机会动作", best ? best.action : "-")
+  ].join("");
+
+  table(
+    "opportunity-center",
+    ["层级", "来源", "机会", "结果", "评分", "风险", "预估日收益", "边际", "盘口", "建议动作", "依据"],
+    opportunities.map((item) => [
+      opportunityPill(item.tier),
+      sourceText(item.source),
+      text(item.title),
+      text(item.outcome ?? "-"),
+      scorePill(item.score ?? 0),
+      riskPill(item.riskLevel),
+      item.expectedDailyReward ? usd.format(item.expectedDailyReward) : "-",
+      item.edgeBps ? `${formatter.format(item.edgeBps)} bps` : "-",
+      item.bid || item.ask ? `${price(item.bid)} / ${price(item.ask)}` : "-",
+      text(item.action),
+      text([item.rationale, ...(item.reasons ?? [])].filter(Boolean).join("; "))
+    ])
+  );
 }
 
 function initTabs() {
@@ -348,6 +383,23 @@ function decisionPill(tier, eligible) {
   const label = tier ?? "unknown";
   const className = eligible ? (tier === "prime" ? "pill-filled" : "pill-partial") : "pill-failed";
   return `<span class="pill ${className}">${escapeHtml(label)}</span>`;
+}
+
+function opportunityPill(tier) {
+  const labels = { execute: "可执行", watch: "观察", avoid: "禁止" };
+  const classes = { execute: "pill-filled", watch: "pill-partial", avoid: "pill-failed" };
+  return `<span class="pill ${classes[tier] ?? "pill-failed"}">${escapeHtml(labels[tier] ?? tier ?? "-")}</span>`;
+}
+
+function riskPill(risk) {
+  const labels = { low: "低", medium: "中", high: "高" };
+  const classes = { low: "pill-filled", medium: "pill-partial", high: "pill-failed" };
+  return `<span class="pill ${classes[risk] ?? "pill-failed"}">${escapeHtml(labels[risk] ?? risk ?? "-")}</span>`;
+}
+
+function sourceText(source) {
+  const labels = { maker: "做市", arbitrage: "套利", copy: "跟单" };
+  return labels[source] ?? source ?? "-";
 }
 
 function strategyGainText(strategy) {

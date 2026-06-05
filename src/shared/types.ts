@@ -198,6 +198,27 @@ export interface ArbitrageOpportunity {
   updatedAt: number;
 }
 
+export type OpportunityTier = "execute" | "watch" | "avoid";
+export type OpportunitySource = "maker" | "arbitrage" | "copy";
+
+export interface OpportunityItem {
+  id: string;
+  tier: OpportunityTier;
+  source: OpportunitySource;
+  title: string;
+  outcome?: string;
+  score: number;
+  action: string;
+  rationale: string;
+  expectedDailyReward?: number;
+  edgeBps?: number;
+  bid?: number;
+  ask?: number;
+  riskLevel: "low" | "medium" | "high";
+  reasons: string[];
+  updatedAt: number;
+}
+
 export interface MakerCandidate {
   id: string;
   conditionId: string;
@@ -390,6 +411,7 @@ export interface AppState {
   targetPositions: Position[];
   makerCandidates: MakerCandidate[];
   arbitrageOpportunities: ArbitrageOpportunity[];
+  opportunityCenter: OpportunityItem[];
   quotes: Record<string, MarketQuote>;
   signals: CopySignal[];
   orders: CopyOrder[];
