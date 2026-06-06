@@ -24,6 +24,9 @@ const config = {
   signalStaleMs: 120000,
   maxSignalApiDelayMs: 30000,
   maxAssetExposureUsdc: 20,
+  maxConditionExposureUsdc: 25,
+  maxOpenCopyPositions: 12,
+  minSourceTradeUsdc: 50,
   marketCooldownMs: 30000,
   minCopyPrice: 0.05,
   maxCopyPrice: 0.85,
@@ -40,6 +43,8 @@ const config = {
   makerSimTopN: 8,
   makerSimMaxMarketExposureUsdc: 50,
   makerSimRewardCaptureRate: 0.02,
+  makerRewardEstimateHaircut: 0.5,
+  makerRewardCaptureCap: 0.1,
   makerSimFillThresholdBps: 25,
   strategyMinScore: 55,
   strategyMaxCatalystRisk: 55,
@@ -70,5 +75,32 @@ describe("copy engine", () => {
     };
     expect(engine.signalsFromActivities(config, wallets, [event])).toHaveLength(1);
     expect(engine.signalsFromActivities(config, wallets, [event])).toHaveLength(0);
+  });
+
+  it("marks small and sports/fast source trades as rejected", () => {
+    const engine = new CopyEngine();
+    const wallet = "0x0000000000000000000000000000000000000001";
+    const wallets: WalletScore[] = [
+      { wallet, rank: 1, pnl: 10, volume: 1000, roi: 0.1, currentValue: 50, score: 1, positions: [] }
+    ];
+    const signal = engine.signalsFromActivities(config, wallets, [
+      {
+        proxyWallet: wallet,
+        timestamp: Math.floor(Date.now() / 1000),
+        conditionId: "sports",
+        type: "TRADE",
+        size: 10,
+        usdcSize: 5,
+        transactionHash: "0xsports",
+        price: 0.5,
+        asset: "sports-asset",
+        side: "BUY",
+        title: "Will Scotland win the 2026 FIFA World Cup?"
+      }
+    ])[0];
+
+    expect(signal.tags).toContain("sports");
+    expect(signal.rejectReasons).toContain("sports market excluded");
+    expect(signal.rejectReasons.some((reason) => reason.includes("source trade"))).toBe(true);
   });
 });

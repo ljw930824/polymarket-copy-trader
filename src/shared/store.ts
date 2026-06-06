@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import type { AppState, CopyMode, MakerSimulationState, RiskState, SimulationState } from "./types.js";
 
 export const DEFAULT_STATE_PATH = "data/state.json";
+export const MAKER_REWARD_MODEL_VERSION = "book-competition-v1";
 
 export function emptyRisk(): RiskState {
   return {
@@ -34,6 +35,7 @@ export function createSimulationState(initialCash = 0): SimulationState {
 
 export function createMakerSimulationState(initialCash = 0): MakerSimulationState {
   return {
+    rewardModelVersion: MAKER_REWARD_MODEL_VERSION,
     initialCash,
     cash: initialCash,
     positions: {},

@@ -7,7 +7,7 @@ import type {
   MarketQuote,
   Side
 } from "../shared/types.js";
-import { createMakerSimulationState } from "../shared/store.js";
+import { createMakerSimulationState, MAKER_REWARD_MODEL_VERSION } from "../shared/store.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_REWARD_ACCRUAL_MS = 5 * 60 * 1000;
@@ -16,7 +16,7 @@ export function ensureMakerSimulation(
   simulation: MakerSimulationState | undefined,
   initialCash: number
 ): MakerSimulationState {
-  if (!simulation || simulation.initialCash <= 0) {
+  if (!simulation || simulation.initialCash <= 0 || simulation.rewardModelVersion !== MAKER_REWARD_MODEL_VERSION) {
     return createMakerSimulationState(initialCash);
   }
   return {
@@ -39,7 +39,7 @@ export function updateMakerSimulation(
   const selected = candidates.slice(0, config.makerSimTopN);
   const elapsedMs = Math.min(MAX_REWARD_ACCRUAL_MS, Math.max(0, now - (simulation.updatedAt || now)));
   const activeCandidates = selected.filter((candidate) => hasLiveBook(candidate, quotes));
-  const rewardAccrual = estimateRewardAccrual(activeCandidates, elapsedMs, config.makerSimRewardCaptureRate);
+  const rewardAccrual = estimateRewardAccrual(activeCandidates, elapsedMs);
   let next: MakerSimulationState = {
     ...simulation,
     positions: { ...simulation.positions },
@@ -211,8 +211,7 @@ function finalizeMakerSimulation(
       : 0;
   const activeQuoteCount = candidates.filter((candidate) => quotes[candidate.asset]?.bid && quotes[candidate.asset]?.ask).length;
   const estimatedDailyReward = estimateDailyReward(
-    candidates.slice(0, config.makerSimTopN).filter((candidate) => hasLiveBook(candidate, quotes)),
-    config.makerSimRewardCaptureRate
+    candidates.slice(0, config.makerSimTopN).filter((candidate) => hasLiveBook(candidate, quotes))
   );
 
   return {
@@ -246,8 +245,8 @@ function finalizeMakerSimulation(
   };
 }
 
-function estimateRewardAccrual(candidates: MakerCandidate[], elapsedMs: number, captureRate: number): number {
-  return (estimateDailyReward(candidates, captureRate) * elapsedMs) / DAY_MS;
+function estimateRewardAccrual(candidates: MakerCandidate[], elapsedMs: number): number {
+  return (estimateDailyReward(candidates) * elapsedMs) / DAY_MS;
 }
 
 function hasLiveBook(candidate: MakerCandidate, quotes: Record<string, MarketQuote>): boolean {
@@ -255,12 +254,15 @@ function hasLiveBook(candidate: MakerCandidate, quotes: Record<string, MarketQuo
   return Boolean(quote?.bid && quote.ask);
 }
 
-function estimateDailyReward(candidates: MakerCandidate[], captureRate: number): number {
+function estimateDailyReward(candidates: MakerCandidate[]): number {
   const byCondition = new Map<string, number>();
   for (const candidate of candidates) {
-    byCondition.set(candidate.conditionId, Math.max(byCondition.get(candidate.conditionId) ?? 0, candidate.dailyReward));
+    byCondition.set(
+      candidate.conditionId,
+      Math.max(byCondition.get(candidate.conditionId) ?? 0, candidate.rewardEstimate.estimatedDailyReward)
+    );
   }
-  return [...byCondition.values()].reduce((sum, reward) => sum + reward * captureRate, 0);
+  return [...byCondition.values()].reduce((sum, reward) => sum + reward, 0);
 }
 
 function emptyMakerPosition(candidate: MakerCandidate, price: number, now: number): MakerSimulationPosition {

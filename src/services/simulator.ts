@@ -98,6 +98,7 @@ function applyBuy(simulation: SimulationState, order: CopyOrder, signal: CopySig
   const nextShares = current.shares + shares;
   const nextPosition: SimulationPosition = {
     ...current,
+    conditionId: current.conditionId ?? signal.conditionId,
     title: current.title ?? signal.title,
     outcome: current.outcome ?? signal.outcome,
     shares: nextShares,
@@ -203,6 +204,7 @@ function finalize(simulation: SimulationState): SimulationState {
 function emptyPosition(asset: string, signal: CopySignal, price: number): SimulationPosition {
   return {
     asset,
+    conditionId: signal.conditionId,
     title: signal.title,
     outcome: signal.outcome,
     shares: 0,

@@ -29,6 +29,9 @@ const config = {
   signalStaleMs: 120000,
   maxSignalApiDelayMs: 30000,
   maxAssetExposureUsdc: 20,
+  maxConditionExposureUsdc: 25,
+  maxOpenCopyPositions: 12,
+  minSourceTradeUsdc: 50,
   marketCooldownMs: 30000,
   minCopyPrice: 0.05,
   maxCopyPrice: 0.85,
@@ -45,6 +48,8 @@ const config = {
   makerSimTopN: 8,
   makerSimMaxMarketExposureUsdc: 50,
   makerSimRewardCaptureRate: 0.02,
+  makerRewardEstimateHaircut: 0.5,
+  makerRewardCaptureCap: 0.1,
   makerSimFillThresholdBps: 25,
   strategyMinScore: 40,
   strategyMaxCatalystRisk: 55,
@@ -118,6 +123,31 @@ describe("market making rewards", () => {
 
     expect(opportunities[0].type).toBe("buy-basket");
     expect(opportunities[0].edgeBps).toBe(100);
+  });
+
+  it("reduces estimated reward capture when qualifying book competition is deeper", () => {
+    const market = rewardMarket("Will test reward model resolve yes?", "asset-depth", 100, 3.5);
+    const quotes = { "asset-depth": { assetId: "asset-depth", bid: 0.49, ask: 0.51, updatedAt: 1 } };
+    const shallow = scoreMakerCandidates(config, [market], quotes, {
+      "asset-depth": {
+        assetId: "asset-depth",
+        bids: [{ price: 0.49, size: 10 }],
+        asks: [{ price: 0.51, size: 10 }],
+        updatedAt: 1
+      }
+    })[0];
+    const deep = scoreMakerCandidates(config, [market], quotes, {
+      "asset-depth": {
+        assetId: "asset-depth",
+        bids: [{ price: 0.49, size: 10_000 }],
+        asks: [{ price: 0.51, size: 10_000 }],
+        updatedAt: 1
+      }
+    })[0];
+
+    expect(shallow.rewardEstimate.model).toBe("book-competition");
+    expect(shallow.rewardEstimate.estimatedDailyReward).toBeGreaterThan(deep.rewardEstimate.estimatedDailyReward);
+    expect(deep.rewardEstimate.captureRate).toBeLessThan(shallow.rewardEstimate.captureRate);
   });
 });
 

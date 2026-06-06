@@ -25,6 +25,9 @@ const config = {
   signalStaleMs: 120000,
   maxSignalApiDelayMs: 30000,
   maxAssetExposureUsdc: 20,
+  maxConditionExposureUsdc: 25,
+  maxOpenCopyPositions: 12,
+  minSourceTradeUsdc: 50,
   marketCooldownMs: 30000,
   minCopyPrice: 0.05,
   maxCopyPrice: 0.85,
@@ -41,6 +44,8 @@ const config = {
   makerSimTopN: 3,
   makerSimMaxMarketExposureUsdc: 50,
   makerSimRewardCaptureRate: 0.02,
+  makerRewardEstimateHaircut: 0.5,
+  makerRewardCaptureCap: 0.1,
   makerSimFillThresholdBps: 25,
   strategyMinScore: 55,
   strategyMaxCatalystRisk: 55,
@@ -114,6 +119,14 @@ function makerCandidate(): MakerCandidate {
       total: 80
     },
     decision: { eligible: true, reasons: [], tier: "prime" },
+    rewardEstimate: {
+      captureRate: 0.02,
+      estimatedDailyReward: 2,
+      existingCompetitionScore: 100,
+      proposedQuoteScore: 2,
+      confidence: "high",
+      model: "book-competition"
+    },
     tags: [],
     rejectReasons: [],
     quotePlan: {

@@ -1,5 +1,5 @@
 import { fetchJson } from "../shared/http.js";
-import type { MarketQuote, RewardMarket, RewardRate } from "../shared/types.js";
+import type { MarketQuote, OrderBookLevel, OrderBookSummary, RewardMarket, RewardRate } from "../shared/types.js";
 
 interface RawSamplingMarket {
   condition_id?: unknown;
@@ -65,6 +65,34 @@ export class ClobApiClient {
     }
     return quotes;
   }
+
+  async books(assetIds: string[]): Promise<OrderBookSummary[]> {
+    const uniqueAssets = [...new Set(assetIds.filter(Boolean))];
+    return mapLimit(uniqueAssets, 6, async (assetId) => {
+      const payload = await fetchJson<Record<string, unknown>>(
+        new URL(`/book?token_id=${encodeURIComponent(assetId)}`, this.host)
+      );
+      return {
+        assetId,
+        bids: normalizeBookLevels(payload.bids),
+        asks: normalizeBookLevels(payload.asks),
+        updatedAt: numberValue(payload.timestamp) || Date.now()
+      };
+    });
+  }
+}
+
+function normalizeBookLevels(raw: unknown): OrderBookLevel[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return undefined;
+      const level = item as Record<string, unknown>;
+      const price = numberValue(level.price);
+      const size = numberValue(level.size);
+      return price > 0 && size > 0 ? { price, size } : undefined;
+    })
+    .filter((level): level is OrderBookLevel => Boolean(level));
 }
 
 function normalizeMarket(raw: unknown): RewardMarket | undefined {
@@ -162,4 +190,18 @@ function chunks<T>(values: T[], size: number): T[][] {
     result.push(values.slice(index, index + size));
   }
   return result;
+}
+
+async function mapLimit<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }

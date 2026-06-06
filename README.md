@@ -81,6 +81,11 @@ PORT=8787
 TOP_N=3
 COPY_TOTAL_BUDGET_USDC=100
 MAX_SINGLE_ORDER_USDC=10
+MAX_ASSET_EXPOSURE_USDC=20
+MAX_CONDITION_EXPOSURE_USDC=25
+MAX_OPEN_COPY_POSITIONS=12
+MIN_SOURCE_TRADE_USDC=50
+MARKET_COOLDOWN_MS=300000
 MIN_SIGNAL_SCORE=20
 EXCLUDE_SPORTS_MARKETS=true
 
@@ -94,6 +99,8 @@ MAKER_SIM_INITIAL_CASH_USDC=100
 MAKER_SIM_TOP_N=8
 MAKER_SIM_MAX_MARKET_EXPOSURE_USDC=50
 MAKER_SIM_REWARD_CAPTURE_RATE=0.02
+MAKER_REWARD_ESTIMATE_HAIRCUT=0.50
+MAKER_REWARD_CAPTURE_CAP=0.10
 MAKER_SIM_FILL_THRESHOLD_BPS=25
 
 STRATEGY_MIN_SCORE=55
@@ -102,6 +109,16 @@ STRATEGY_MAX_INVENTORY_RISK=70
 ```
 
 ## 做市策略评分
+
+做市奖励估算优先使用 `book-competition` 模型：
+
+1. 读取候选 token 的当前 order book。
+2. 按官方奖励思路，对最大合格价差内的盘口深度进行二次距离加权。
+3. 计算本地计划 bid/ask 的预计得分。
+4. 用 `我们的预计得分 / (现有竞争得分 + 我们的预计得分)` 估算奖励份额。
+5. 再乘以 `MAKER_REWARD_ESTIMATE_HAIRCUT` 并受 `MAKER_REWARD_CAPTURE_CAP` 限制。
+
+无法获得 order book 时，才回退到 `MAKER_SIM_REWARD_CAPTURE_RATE` 固定比例。该模型仍是估算，因为公开盘口无法准确拆分全部做市商身份、挂单存续时间和每分钟抽样结果。
 
 综合策略评分：
 
@@ -139,6 +156,18 @@ StrategyScore =
 - BUY 会增加库存，SELL 会减少库存并计算已实现 PnL。
 - 奖励收益按 `MAKER_SIM_REWARD_CAPTURE_RATE` 做保守估算，并单独显示为 `估算已获奖励`。
 - 做市账本和跟单模拟盘完全分开，避免两种策略互相污染。
+
+## 跟单风险控制
+
+基于当前回测中重复体育信号、未实现收益占比过高和单一头寸贡献过大的问题，跟单模块默认执行：
+
+- 过滤 World Cup、Finals、halftime、当天/短周期市场。
+- 来源交易金额低于 `MIN_SOURCE_TRADE_USDC` 的 BUY 信号不跟。
+- 单个 outcome 受 `MAX_ASSET_EXPOSURE_USDC` 限制。
+- 同一 condition 的总敞口受 `MAX_CONDITION_EXPOSURE_USDC` 限制。
+- 总持仓数受 `MAX_OPEN_COPY_POSITIONS` 限制。
+- BUY 冷却时间默认提高到 5 分钟，减少重复追单。
+- 已有模拟持仓收到 SELL 时，优先允许退出，避免过滤规则阻止平仓。
 
 ## dashboard 颜色
 

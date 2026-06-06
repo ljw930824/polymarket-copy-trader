@@ -2,7 +2,7 @@ import pino from "pino";
 import { loadConfig } from "./shared/config.js";
 import { sleep } from "./shared/http.js";
 import { createEmptyState, JsonStateStore } from "./shared/store.js";
-import type { ActivityEvent, AppState, MarketQuote, Position, RewardMarket } from "./shared/types.js";
+import type { ActivityEvent, AppState, MarketQuote, OrderBookSummary, Position, RewardMarket } from "./shared/types.js";
 import { DataApiClient } from "./polymarket/dataApi.js";
 import { ClobApiClient } from "./polymarket/clobApi.js";
 import { MarketWsCache } from "./polymarket/marketWs.js";
@@ -48,6 +48,7 @@ async function main(): Promise<void> {
   let lastMakerRefresh = 0;
   let rewardMarkets: RewardMarket[] = [];
   let seededQuotes: Record<string, MarketQuote> = {};
+  let rewardBooks: Record<string, OrderBookSummary> = {};
 
   if (config.mode === "live") {
     const geo = await dataApi.geoblock();
@@ -84,9 +85,16 @@ async function main(): Promise<void> {
           ...seededQuotes,
           ...quoteRecord(await clobApi.prices(rewardAssets))
         };
+        const preliminaryCandidates = scoreMakerCandidates(config, rewardMarkets, seededQuotes);
+        rewardBooks = bookRecord(await clobApi.books(preliminaryCandidates.map((candidate) => candidate.asset)));
         lastMakerRefresh = Date.now();
         logger.info(
-          { markets: rewardMarkets.length, assets: rewardAssets.length, seededQuotes: Object.keys(seededQuotes).length },
+          {
+            markets: rewardMarkets.length,
+            assets: rewardAssets.length,
+            seededQuotes: Object.keys(seededQuotes).length,
+            rewardBooks: Object.keys(rewardBooks).length
+          },
           "maker reward markets refreshed"
         );
       }
@@ -109,7 +117,7 @@ async function main(): Promise<void> {
         logger.info({ signal: signal.id, status: order.status, mode: config.mode }, "copy order processed");
       }
       state.quotes = mergeQuoteRecords(seededQuotes, marketWs.snapshot());
-      state.makerCandidates = config.makerEnabled ? scoreMakerCandidates(config, rewardMarkets, state.quotes) : [];
+      state.makerCandidates = config.makerEnabled ? scoreMakerCandidates(config, rewardMarkets, state.quotes, rewardBooks) : [];
       if (config.makerEnabled && state.makerCandidates.length > 0 && state.makerCandidates.every((candidate) => !candidate.decision.eligible)) {
         const missingBookAssets = state.makerCandidates
           .filter((candidate) => candidate.tags.includes("no-live-book"))
@@ -117,7 +125,7 @@ async function main(): Promise<void> {
         if (missingBookAssets.length > 0) {
           seededQuotes = { ...seededQuotes, ...quoteRecord(await clobApi.prices(missingBookAssets)) };
           state.quotes = mergeQuoteRecords(seededQuotes, marketWs.snapshot());
-          state.makerCandidates = scoreMakerCandidates(config, rewardMarkets, state.quotes);
+          state.makerCandidates = scoreMakerCandidates(config, rewardMarkets, state.quotes, rewardBooks);
         }
       }
       state.arbitrageOpportunities = config.makerEnabled ? findArbitrageOpportunities(state.makerCandidates, state.quotes) : [];
@@ -178,6 +186,10 @@ function uniqueAssets(positions: Position[]): string[] {
 
 function quoteRecord(quotes: MarketQuote[]): Record<string, MarketQuote> {
   return Object.fromEntries(quotes.map((quote) => [quote.assetId, quote]));
+}
+
+function bookRecord(books: OrderBookSummary[]): Record<string, OrderBookSummary> {
+  return Object.fromEntries(books.map((book) => [book.assetId, book]));
 }
 
 function mergeQuoteRecords(base: Record<string, MarketQuote>, overlay: Record<string, MarketQuote>): Record<string, MarketQuote> {

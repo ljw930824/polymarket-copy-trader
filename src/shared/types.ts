@@ -23,6 +23,9 @@ export interface AppConfig {
   signalStaleMs: number;
   maxSignalApiDelayMs: number;
   maxAssetExposureUsdc: number;
+  maxConditionExposureUsdc: number;
+  maxOpenCopyPositions: number;
+  minSourceTradeUsdc: number;
   marketCooldownMs: number;
   minCopyPrice: number;
   maxCopyPrice: number;
@@ -39,6 +42,8 @@ export interface AppConfig {
   makerSimTopN: number;
   makerSimMaxMarketExposureUsdc: number;
   makerSimRewardCaptureRate: number;
+  makerRewardEstimateHaircut: number;
+  makerRewardCaptureCap: number;
   makerSimFillThresholdBps: number;
   strategyMinScore: number;
   strategyMaxCatalystRisk: number;
@@ -130,6 +135,18 @@ export interface MarketQuote {
   updatedAt: number;
 }
 
+export interface OrderBookLevel {
+  price: number;
+  size: number;
+}
+
+export interface OrderBookSummary {
+  assetId: string;
+  bids: OrderBookLevel[];
+  asks: OrderBookLevel[];
+  updatedAt: number;
+}
+
 export interface RewardRate {
   assetAddress: string;
   dailyReward: number;
@@ -179,6 +196,15 @@ export interface StrategyDecision {
   eligible: boolean;
   reasons: string[];
   tier: "prime" | "watch" | "avoid";
+}
+
+export interface RewardEstimate {
+  captureRate: number;
+  estimatedDailyReward: number;
+  existingCompetitionScore: number;
+  proposedQuoteScore: number;
+  confidence: "low" | "medium" | "high";
+  model: "fixed-fallback" | "book-competition";
 }
 
 export interface ArbitrageOpportunity {
@@ -237,6 +263,7 @@ export interface MakerCandidate {
   strategyScore: number;
   strategy: StrategyBreakdown;
   decision: StrategyDecision;
+  rewardEstimate: RewardEstimate;
   tags: string[];
   rejectReasons: string[];
   quotePlan: MakerQuotePlan;
@@ -299,6 +326,7 @@ export interface SimulationTrade {
 
 export interface SimulationPosition {
   asset: string;
+  conditionId?: string;
   title?: string;
   outcome?: string;
   shares: number;
@@ -377,6 +405,7 @@ export interface MakerSimulationSnapshot {
 }
 
 export interface MakerSimulationState {
+  rewardModelVersion: string;
   initialCash: number;
   cash: number;
   positions: Record<string, MakerSimulationPosition>;

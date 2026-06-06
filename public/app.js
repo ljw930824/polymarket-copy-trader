@@ -121,6 +121,10 @@ function renderMetrics(state) {
     metric("跟单模拟权益", `${usd.format(state.simulation?.totalEquity ?? 0)} PAPER`),
     metric("跟单模拟PnL", signedUsd(simPnl), pnlClass(simPnl)),
     metric("跟单模拟 ROI", percent(state.simulation?.roi ?? 0), pnlClass(state.simulation?.roi ?? 0)),
+    metric("跟单已实现PnL", signedUsd(state.simulation?.realizedPnl ?? 0), pnlClass(state.simulation?.realizedPnl ?? 0)),
+    metric("跟单未实现PnL", signedUsd(state.simulation?.unrealizedPnl ?? 0), pnlClass(state.simulation?.unrealizedPnl ?? 0)),
+    metric("跟单最大回撤", percent(state.simulation?.maxDrawdown ?? 0), "negative"),
+    metric("跟单持仓数", Object.keys(state.simulation?.positions ?? {}).length),
     metric("上一信号距今", signalAgeMs ? `${formatter.format(signalAgeMs / 1000)} 秒` : "-"),
     metric("公开 API 延迟", detectionLagMs ? `${formatter.format(detectionLagMs / 1000)} 秒` : "-")
   ].join("");
@@ -137,6 +141,7 @@ function renderMakerMetrics(simulation, candidates) {
     metric("库存市值", usd.format(simulation?.inventoryValue ?? 0)),
     metric("估算已获奖励", usd.format(simulation?.accruedReward ?? 0)),
     metric("估算日奖励", usd.format(latestSnapshot?.estimatedDailyReward ?? 0)),
+    metric("奖励模型", simulation?.rewardModelVersion ?? "-"),
     metric("活跃盘口", `${activeQuoteCount}/${candidates.length}`),
     metric("模拟成交", simulation?.trades?.length ?? 0),
     metric("最大回撤", percent(simulation?.maxDrawdown ?? 0), "negative")
@@ -153,6 +158,9 @@ function renderMakerCandidates(candidates) {
       "市场",
       "结果",
       "日奖励",
+      "动态估算日收益",
+      "估算捕获率",
+      "奖励模型",
       "最大价差",
       "盘口",
       "收益拆解",
@@ -169,6 +177,9 @@ function renderMakerCandidates(candidates) {
       text(candidate.title ?? "-"),
       text(candidate.outcome ?? "-"),
       usd.format(candidate.dailyReward ?? 0),
+      usd.format(candidate.rewardEstimate?.estimatedDailyReward ?? 0),
+      percent(candidate.rewardEstimate?.captureRate ?? 0),
+      rewardEstimateText(candidate.rewardEstimate),
       `${formatter.format(candidate.maxSpreadBps ?? 0)} bps`,
       quoteText(candidate),
       strategyGainText(candidate.strategy),
@@ -419,6 +430,15 @@ function strategyRiskText(strategy) {
     `Inv ${formatter.format(strategy.inventoryRisk)} / Cat ${formatter.format(strategy.catalystRisk)} / Liq ${formatter.format(
       strategy.liquidityRisk
     )} / Comp ${formatter.format(strategy.competitionRisk)}`
+  );
+}
+
+function rewardEstimateText(estimate) {
+  if (!estimate) return "-";
+  return text(
+    `${estimate.model} / ${estimate.confidence} / comp ${formatter.format(
+      estimate.existingCompetitionScore ?? 0
+    )} / ours ${formatter.format(estimate.proposedQuoteScore ?? 0)}`
   );
 }
 

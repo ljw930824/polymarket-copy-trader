@@ -3,6 +3,8 @@ import type {
   ArbitrageOpportunity,
   MakerCandidate,
   MarketQuote,
+  OrderBookSummary,
+  RewardEstimate,
   RewardMarket,
   StrategyBreakdown,
   StrategyDecision
@@ -12,12 +14,15 @@ import { isSportsMarket } from "./strategyGuards.js";
 export function scoreMakerCandidates(
   config: AppConfig,
   markets: RewardMarket[],
-  quotes: Record<string, MarketQuote> = {}
+  quotes: Record<string, MarketQuote> = {},
+  books: Record<string, OrderBookSummary> = {}
 ): MakerCandidate[] {
   const maxReward = Math.max(1, ...markets.flatMap((market) => market.rates.map((rate) => rate.dailyReward)));
 
   return markets
-    .flatMap((market) => market.tokens.map((token) => buildCandidate(config, market, token, quotes[token.tokenId], maxReward)))
+    .flatMap((market) =>
+      market.tokens.map((token) => buildCandidate(config, market, token, quotes[token.tokenId], books[token.tokenId], maxReward))
+    )
     .filter((candidate) => candidate.dailyReward >= config.makerMinDailyReward)
     .filter((candidate) => candidate.maxSpreadBps <= config.makerMaxSpreadBps)
     .filter((candidate) => candidate.score >= config.makerMinScore)
@@ -36,6 +41,7 @@ function buildCandidate(
   market: RewardMarket,
   token: RewardMarket["tokens"][number],
   quote: MarketQuote | undefined,
+  book: OrderBookSummary | undefined,
   maxReward: number
 ): MakerCandidate {
   const rewardRate = market.rates.find((rate) => sameAsset(rate.assetAddress, token.tokenId));
@@ -44,6 +50,7 @@ function buildCandidate(
   const observedSpreadBps = quote?.bid && quote.ask ? Math.max(0, (quote.ask - quote.bid) * 10_000) : undefined;
   const referenceMid = midPrice(quote);
   const quotePlan = buildQuotePlan(config, token.tokenId, token.outcome, market.minSize, maxSpreadBps, referenceMid);
+  const rewardEstimate = estimateReward(config, market, dailyReward, quotePlan, referenceMid, book);
   const tags: string[] = [];
   const rejectReasons: string[] = [];
   let score = 0;
@@ -81,7 +88,7 @@ function buildCandidate(
   score += 10 * Math.max(0, 1 - Math.abs(referenceMid - 0.5) * 1.7);
   score += 6 * Math.max(0, 1 - Math.max(0, market.minSize - config.makerQuoteSizeUsdc) / Math.max(market.minSize, 1));
   const normalizedScore = clamp(score);
-  const strategy = buildStrategyBreakdown(config, market, dailyReward, quote, referenceMid, observedSpreadBps);
+  const strategy = buildStrategyBreakdown(config, market, rewardEstimate, quote, referenceMid, observedSpreadBps);
   const strategyScore = clamp(strategy.total);
   const decision = buildDecision(config, strategyScore, strategy, tags, rejectReasons);
 
@@ -103,6 +110,7 @@ function buildCandidate(
     strategyScore,
     strategy,
     decision,
+    rewardEstimate,
     tags,
     rejectReasons,
     quotePlan,
@@ -186,21 +194,25 @@ export function findArbitrageOpportunities(
 function buildStrategyBreakdown(
   config: AppConfig,
   market: RewardMarket,
-  dailyReward: number,
+  rewardEstimate: RewardEstimate,
   quote: MarketQuote | undefined,
   referenceMid: number,
   observedSpreadBps: number | undefined
 ): StrategyBreakdown {
   const minCapital = Math.max(config.makerQuoteSizeUsdc * 2, market.minSize * 2, 1);
-  const rewardYield = clamp(Math.log1p((dailyReward * config.makerSimRewardCaptureRate * 100) / minCapital) * 28);
+  const rewardYield = clamp(Math.log1p((rewardEstimate.estimatedDailyReward * 100) / minCapital) * 28);
   const spreadBps = observedSpreadBps ?? spreadToBps(market.maxSpread);
   const spreadYield = clamp(Math.min(28, Math.max(0, spreadBps) / 18));
-  const rebatePotential = clamp((quote?.bid && quote.ask ? 8 : 2) + Math.min(12, dailyReward / 12));
+  const rebatePotential = clamp((quote?.bid && quote.ask ? 8 : 2) + Math.min(12, rewardEstimate.estimatedDailyReward / 2));
   const holdingRewardPotential = clamp(isSlowCarryMarket(market.question) && referenceMid > 0.12 && referenceMid < 0.88 ? 8 : 1);
   const inventoryRisk = clamp(Math.abs(referenceMid - 0.5) * 95 + Math.max(0, market.minSize - config.makerQuoteSizeUsdc) * 0.45);
   const catalystRisk = clamp(catalystRiskFor(market.question));
   const liquidityRisk = clamp((quote?.bid && quote.ask ? 10 : 55) + Math.max(0, market.minSize - config.makerQuoteSizeUsdc) * 0.2);
-  const competitionRisk = clamp((spreadBps <= 2 ? 28 : 0) + (dailyReward >= 100 ? 16 : dailyReward >= 25 ? 8 : 0));
+  const competitionRisk = clamp(
+    (spreadBps <= 2 ? 28 : 0) +
+      Math.min(36, Math.log1p(rewardEstimate.existingCompetitionScore) * 4) +
+      (rewardEstimate.confidence === "low" ? 12 : 0)
+  );
   const total =
     18 +
     rewardYield * 0.95 +
@@ -245,6 +257,66 @@ function buildDecision(
   const eligible = reasons.length === 0;
   const tier = eligible ? (strategyScore >= 72 ? "prime" : "watch") : "avoid";
   return { eligible, reasons, tier };
+}
+
+function estimateReward(
+  config: AppConfig,
+  market: RewardMarket,
+  dailyReward: number,
+  quotePlan: MakerCandidate["quotePlan"],
+  referenceMid: number,
+  book: OrderBookSummary | undefined
+): RewardEstimate {
+  if (!book || book.bids.length === 0 || book.asks.length === 0) {
+    const captureRate = Math.min(config.makerRewardCaptureCap, config.makerSimRewardCaptureRate);
+    return {
+      captureRate: roundRate(captureRate),
+      estimatedDailyReward: round(dailyReward * captureRate),
+      existingCompetitionScore: 0,
+      proposedQuoteScore: 0,
+      confidence: "low",
+      model: "fixed-fallback"
+    };
+  }
+
+  const maxDistance = rewardSpreadToPrice(market.maxSpread);
+  const existingBidScore = scoreBookSide(book.bids, referenceMid, maxDistance);
+  const existingAskScore = scoreBookSide(book.asks, referenceMid, maxDistance);
+  const existingCompetitionScore = Math.min(existingBidScore, existingAskScore);
+  const proposedBidShares = quotePlan.quoteSizeUsdc / Math.max(quotePlan.bidPrice, 0.01);
+  const proposedAskShares = quotePlan.quoteSizeUsdc / Math.max(quotePlan.askPrice, 0.01);
+  const proposedBidScore = scoreLevel(quotePlan.bidPrice, proposedBidShares, referenceMid, maxDistance);
+  const proposedAskScore = scoreLevel(quotePlan.askPrice, proposedAskShares, referenceMid, maxDistance);
+  const proposedQuoteScore = Math.min(proposedBidScore, proposedAskScore);
+  const rawShare =
+    proposedQuoteScore > 0 ? proposedQuoteScore / Math.max(proposedQuoteScore + existingCompetitionScore, proposedQuoteScore) : 0;
+  const captureRate = Math.min(config.makerRewardCaptureCap, rawShare * config.makerRewardEstimateHaircut);
+
+  return {
+    captureRate: roundRate(captureRate),
+    estimatedDailyReward: round(dailyReward * captureRate),
+    existingCompetitionScore: round(existingCompetitionScore),
+    proposedQuoteScore: round(proposedQuoteScore),
+    confidence: book.bids.length >= 10 && book.asks.length >= 10 ? "high" : "medium",
+    model: "book-competition"
+  };
+}
+
+function scoreBookSide(levels: OrderBookSummary["bids"], midpoint: number, maxDistance: number): number {
+  return levels.reduce((sum, level) => sum + scoreLevel(level.price, level.size, midpoint, maxDistance), 0);
+}
+
+function scoreLevel(price: number, size: number, midpoint: number, maxDistance: number): number {
+  const distance = Math.abs(price - midpoint);
+  if (distance >= maxDistance || maxDistance <= 0) return 0;
+  return ((maxDistance - distance) / maxDistance) ** 2 * size;
+}
+
+function rewardSpreadToPrice(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0.01;
+  if (value <= 1) return value;
+  if (value <= 100) return value / 100;
+  return value / 10_000;
 }
 
 function buildQuotePlan(
@@ -314,6 +386,11 @@ function roundPrice(value: number): number {
 function round(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.round(value * 10) / 10;
+}
+
+function roundRate(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 100_000) / 100_000;
 }
 
 function clamp(value: number): number {
