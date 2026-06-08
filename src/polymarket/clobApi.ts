@@ -8,6 +8,10 @@ interface RawSamplingMarket {
   title?: unknown;
   slug?: unknown;
   market_slug?: unknown;
+  end_date?: unknown;
+  end_date_iso?: unknown;
+  endDate?: unknown;
+  endDateIso?: unknown;
   active?: unknown;
   closed?: unknown;
   accepting_orders?: unknown;
@@ -111,6 +115,7 @@ function normalizeMarket(raw: unknown): RewardMarket | undefined {
     question,
     slug: stringValue(market.slug),
     marketSlug: stringValue(market.market_slug),
+    endDate: stringValue(market.end_date_iso, market.endDateIso, market.end_date, market.endDate),
     active: boolValue(market.active),
     closed: boolValue(market.closed),
     acceptingOrders: boolValue(market.accepting_orders, market.acceptingOrders),

@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import type { AppState, CopyMode, MakerSimulationState, RiskState, SimulationState } from "./types.js";
 
 export const DEFAULT_STATE_PATH = "data/state.json";
-export const MAKER_REWARD_MODEL_VERSION = "book-competition-v1";
+export const MAKER_REWARD_MODEL_VERSION = "book-competition-v2-active-quotes";
 
 export function emptyRisk(): RiskState {
   return {

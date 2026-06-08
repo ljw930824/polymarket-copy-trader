@@ -157,6 +157,7 @@ export interface RewardMarket {
   question: string;
   slug?: string;
   marketSlug?: string;
+  endDate?: string;
   active?: boolean;
   closed?: boolean;
   acceptingOrders?: boolean;

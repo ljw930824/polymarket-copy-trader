@@ -38,7 +38,7 @@ export function updateMakerSimulation(
 ): MakerSimulationState {
   const selected = candidates.slice(0, config.makerSimTopN);
   const elapsedMs = Math.min(MAX_REWARD_ACCRUAL_MS, Math.max(0, now - (simulation.updatedAt || now)));
-  const activeCandidates = selected.filter((candidate) => hasLiveBook(candidate, quotes));
+  const activeCandidates = selected.filter((candidate) => isRewardAccrualEligible(candidate, quotes));
   const rewardAccrual = estimateRewardAccrual(activeCandidates, elapsedMs);
   let next: MakerSimulationState = {
     ...simulation,
@@ -209,9 +209,9 @@ function finalizeMakerSimulation(
     equityHighWatermark > 0
       ? Math.max(simulation.maxDrawdown, (equityHighWatermark - totalEquity) / equityHighWatermark)
       : 0;
-  const activeQuoteCount = candidates.filter((candidate) => quotes[candidate.asset]?.bid && quotes[candidate.asset]?.ask).length;
+  const activeQuoteCount = candidates.filter((candidate) => isRewardAccrualEligible(candidate, quotes)).length;
   const estimatedDailyReward = estimateDailyReward(
-    candidates.slice(0, config.makerSimTopN).filter((candidate) => hasLiveBook(candidate, quotes))
+    candidates.slice(0, config.makerSimTopN).filter((candidate) => isRewardAccrualEligible(candidate, quotes))
   );
 
   return {
@@ -252,6 +252,18 @@ function estimateRewardAccrual(candidates: MakerCandidate[], elapsedMs: number):
 function hasLiveBook(candidate: MakerCandidate, quotes: Record<string, MarketQuote>): boolean {
   const quote = quotes[candidate.asset];
   return Boolean(quote?.bid && quote.ask);
+}
+
+function isRewardAccrualEligible(candidate: MakerCandidate, quotes: Record<string, MarketQuote>): boolean {
+  return (
+    hasLiveBook(candidate, quotes) &&
+    candidate.decision.eligible &&
+    candidate.rewardEstimate.model === "book-competition" &&
+    candidate.rewardEstimate.confidence !== "low" &&
+    candidate.rewardEstimate.estimatedDailyReward > 0 &&
+    candidate.rewardEstimate.proposedQuoteScore > 0 &&
+    candidate.quotePlan.quoteSizeUsdc >= candidate.minSize
+  );
 }
 
 function estimateDailyReward(candidates: MakerCandidate[]): number {

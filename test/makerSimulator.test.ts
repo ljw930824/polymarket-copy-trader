@@ -89,6 +89,35 @@ describe("maker simulator", () => {
     expect(simulation.totalEquity).toBeGreaterThan(100);
     expect(simulation.snapshots).toHaveLength(2);
   });
+
+  it("does not accrue rewards for low-confidence fallback reward estimates", () => {
+    const t0 = 1_000_000;
+    const candidate = {
+      ...makerCandidate(),
+      rewardEstimate: {
+        captureRate: 0.02,
+        estimatedDailyReward: 25,
+        existingCompetitionScore: 0,
+        proposedQuoteScore: 0,
+        confidence: "low" as const,
+        model: "fixed-fallback" as const
+      }
+    };
+    const simulation = createMakerSimulationState(100);
+    simulation.updatedAt = t0;
+
+    const next = updateMakerSimulation(
+      config,
+      simulation,
+      [candidate],
+      { [candidate.asset]: { assetId: candidate.asset, bid: 0.49, ask: 0.51, updatedAt: t0 + 60_000 } },
+      t0 + 60_000
+    );
+
+    expect(next.accruedReward).toBe(0);
+    expect(next.snapshots[0].estimatedDailyReward).toBe(0);
+    expect(next.snapshots[0].activeQuoteCount).toBe(0);
+  });
 });
 
 function makerCandidate(): MakerCandidate {

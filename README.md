@@ -9,7 +9,7 @@
 dashboard 里的 PnL 分三类，不能混用：
 
 - `跟单模拟PnL`：本地 paper 订单和标记价计算出来的模拟账面收益，不是 Polymarket 真实账户收益。
-- `做市估算PnL`：本地 maker 模拟账本加 `MAKER_SIM_REWARD_CAPTURE_RATE` 估算出来的奖励收益。如果没有 maker trades，它主要是奖励捕获估算，不代表已成交利润或已领取奖励。
+- `做市估算PnL`：本地 maker 模拟账本加 `book-competition` 模型估算出来的 paper 奖励收益。它不是 Polymarket 真实账户已领取奖励，也不代表可提现利润。
 - `真实账户PnL`：当前未接入。等切入真金模式后，需要单独读取真实持仓、真实成交、USDC 余额和已领取 rewards，再和模拟账本分开展示。
 
 在当前 `COPY_MODE=paper` 阶段，页面上的盈利只能作为策略研究和回测依据，不能视为可提现利润。
@@ -118,7 +118,13 @@ STRATEGY_MAX_INVENTORY_RISK=70
 4. 用 `我们的预计得分 / (现有竞争得分 + 我们的预计得分)` 估算奖励份额。
 5. 再乘以 `MAKER_REWARD_ESTIMATE_HAIRCUT` 并受 `MAKER_REWARD_CAPTURE_CAP` 限制。
 
-无法获得 order book 时，才回退到 `MAKER_SIM_REWARD_CAPTURE_RATE` 固定比例。该模型仍是估算，因为公开盘口无法准确拆分全部做市商身份、挂单存续时间和每分钟抽样结果。
+无法获得 order book 时，才回退到 `MAKER_SIM_REWARD_CAPTURE_RATE` 固定比例。fallback 只用于候选评分和观察，不再进入 maker 模拟盘的奖励累积。该模型仍是估算，因为公开盘口无法准确拆分全部做市商身份、挂单存续时间和每分钟抽样结果。
+
+奖励真实性口径：
+
+- 当前 dashboard 的 `accruedReward` 是 paper 估算，不是真实到账。
+- 官方 liquidity rewards 需要真实 resting limit orders、满足 min size/max spread、持续在线并参与每分钟抽样，最终按同市场 maker 竞争份额分配。
+- 真实奖励确认需要接入账户地址的实际 rewards/claim/settlement 数据，本项目当前还没有接入这条真实账户口径。
 
 综合策略评分：
 
@@ -136,7 +142,7 @@ StrategyScore =
 
 收益侧：
 
-- `rewardYield`：官方 liquidity rewards 的可捕获收益，按 `MAKER_SIM_REWARD_CAPTURE_RATE` 保守估算。
+- `rewardYield`：官方 liquidity rewards 的可捕获收益，优先按 order book 竞争得分估算；没有 book 时只作为低置信 fallback 观察值。
 - `spreadYield`：当前盘口价差带来的被动成交收益空间。
 - `rebatePotential`：maker rebate 潜力。
 - `holdingRewardPotential`：长期慢变量市场可能叠加 holding rewards 的潜力。
@@ -148,13 +154,13 @@ StrategyScore =
 - `liquidityRisk`：缺盘口、min size 过高带来的流动性风险。
 - `competitionRisk`：价差极窄或奖励过高时，其他 LP 竞争激烈导致奖励捕获率下降。
 
-只有 `eligible=true` 的做市候选会进入 maker 模拟盘。被过滤的候选仍会在 dashboard 展示原因，方便复盘。
+只有 `eligible=true` 的做市候选会进入 maker 模拟盘。失效市场会被排除，包括 `active=false`、`closed=true`、`acceptingOrders=false`、已过 `endDate`、体育/短周期市场、缺 live book、策略评分过低或风险超限。被过滤的候选在评分阈值允许时会在 dashboard 展示原因，方便复盘。
 
 ## 做市模拟规则
 
 - 不假设自己一定成交；只有当中间价穿越本地计划的被动 bid/ask 时，才记录 paper maker 成交。
 - BUY 会增加库存，SELL 会减少库存并计算已实现 PnL。
-- 奖励收益按 `MAKER_SIM_REWARD_CAPTURE_RATE` 做保守估算，并单独显示为 `估算已获奖励`。
+- 奖励收益只对高/中置信 `book-competition` 候选累积：必须有 live bid/ask、候选仍 eligible、预计挂单满足 min size、并且有正的计划挂单得分。低置信 fallback 候选不会累积奖励。
 - 做市账本和跟单模拟盘完全分开，避免两种策略互相污染。
 
 ## 跟单风险控制

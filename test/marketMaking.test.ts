@@ -106,6 +106,23 @@ describe("market making rewards", () => {
     expect(selected.map((candidate) => candidate.asset)).not.toContain("asset-fast");
   });
 
+  it("does not select expired reward markets", () => {
+    const looseConfig = { ...config, makerMinScore: 0 };
+    const expired = {
+      ...rewardMarket("Will no Fed rate cuts happen in 2026?", "asset-expired", 500, 3.5),
+      endDate: new Date(Date.now() - 60_000).toISOString()
+    };
+    const candidates = scoreMakerCandidates(
+      looseConfig,
+      [expired],
+      { "asset-expired": { assetId: "asset-expired", bid: 0.49, ask: 0.51, updatedAt: 1 } }
+    );
+
+    expect(candidates[0].decision.eligible).toBe(false);
+    expect(candidates[0].decision.reasons).toContain("market expired");
+    expect(selectStrategyCandidates(looseConfig, candidates)).toHaveLength(0);
+  });
+
   it("detects complementary yes/no basket arbitrage", () => {
     const candidates = scoreMakerCandidates(
       config,

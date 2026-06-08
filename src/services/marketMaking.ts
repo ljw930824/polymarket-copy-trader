@@ -65,6 +65,10 @@ function buildCandidate(
     score -= 80;
     rejectReasons.push("market not active");
   }
+  if (isExpiredMarket(market.endDate)) {
+    score -= 80;
+    rejectReasons.push("market expired");
+  }
   if (market.acceptingOrders === false) {
     score -= 60;
     rejectReasons.push("not accepting orders");
@@ -377,6 +381,12 @@ function sameAsset(left: string, right: string): boolean {
 
 function rewardWeight(dailyReward: number, maxReward: number): number {
   return Math.min(1, Math.log1p(Math.max(0, dailyReward)) / Math.log1p(Math.max(1, maxReward)));
+}
+
+function isExpiredMarket(endDate?: string): boolean {
+  if (!endDate) return false;
+  const timestamp = Date.parse(endDate);
+  return Number.isFinite(timestamp) && timestamp <= Date.now();
 }
 
 function roundPrice(value: number): number {
