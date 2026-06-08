@@ -16,6 +16,21 @@ export function ensureSimulation(simulation: SimulationState | undefined, initia
   return simulation;
 }
 
+export function sanitizeSimulationHistory(simulation: SimulationState): SimulationState {
+  const trades = simulation.trades.filter(
+    (tradeItem) =>
+      !(
+        tradeItem.side === "SELL" &&
+        tradeItem.shares === 0 &&
+        tradeItem.notional === 0 &&
+        tradeItem.skippedReason === "no simulated position to sell"
+      )
+  );
+
+  if (trades.length === simulation.trades.length) return simulation;
+  return finalize({ ...simulation, trades });
+}
+
 export function applyPaperOrder(
   simulation: SimulationState,
   order: CopyOrder,

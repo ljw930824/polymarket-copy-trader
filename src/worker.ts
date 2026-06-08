@@ -13,7 +13,8 @@ import {
   applyPaperOrder,
   ensureSimulation,
   markSimulation,
-  rebuildSimulationFromHistory
+  rebuildSimulationFromHistory,
+  sanitizeSimulationHistory
 } from "./services/simulator.js";
 import { prepareOrderWithStrategyGuards } from "./services/strategyGuards.js";
 import { findArbitrageOpportunities, scoreMakerCandidates, selectStrategyCandidates } from "./services/marketMaking.js";
@@ -33,7 +34,7 @@ async function main(): Promise<void> {
   state = { ...createEmptyState(config.mode), ...state, mode: config.mode };
   state.cycleStartedAt = state.cycleStartedAt ?? Date.now();
   const engine = new CopyEngine(state.signals.map((signal) => signal.id));
-  state.simulation = ensureSimulation(state.simulation, config.simInitialCashUsdc);
+  state.simulation = sanitizeSimulationHistory(ensureSimulation(state.simulation, config.simInitialCashUsdc));
   state.makerSimulation = ensureMakerSimulation(state.makerSimulation, config.makerSimInitialCashUsdc);
   if (state.simulation.trades.length === 0 && state.orders.length > 0 && state.signals.length > 0) {
     state.simulation = rebuildSimulationFromHistory(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createSimulationState } from "../src/shared/store.js";
 import type { CopyOrder, CopySignal } from "../src/shared/types.js";
-import { applyPaperOrder, markSimulation } from "../src/services/simulator.js";
+import { applyPaperOrder, markSimulation, sanitizeSimulationHistory } from "../src/services/simulator.js";
 
 describe("paper simulator", () => {
   it("tracks buys, partial sells, realized pnl, unrealized pnl, roi, and drawdown", () => {
@@ -42,6 +42,20 @@ describe("paper simulator", () => {
     expect(simulation.cash).toBeCloseTo(100);
     expect(simulation.positions["asset-a"]).toBeUndefined();
     expect(simulation.trades[0].skippedReason).toBe("no simulated position to sell");
+  });
+
+  it("removes legacy no-position sell skips without changing accounting", () => {
+    let simulation = createSimulationState(100);
+    const sellSignal = signal("s1", "SELL", "asset-a", 0.6, 10);
+    const sellOrder = order("o1", "s1", "SELL", "asset-a", 10, 0.6);
+    simulation = applyPaperOrder(simulation, sellOrder, sellSignal);
+
+    const sanitized = sanitizeSimulationHistory(simulation);
+
+    expect(sanitized.trades).toHaveLength(0);
+    expect(sanitized.cash).toBeCloseTo(100);
+    expect(sanitized.totalEquity).toBeCloseTo(100);
+    expect(sanitized.totalPnl).toBeCloseTo(0);
   });
 });
 
