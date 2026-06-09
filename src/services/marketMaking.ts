@@ -275,7 +275,7 @@ function estimateReward(
     const captureRate = Math.min(config.makerRewardCaptureCap, config.makerSimRewardCaptureRate);
     return {
       captureRate: roundRate(captureRate),
-      estimatedDailyReward: round(dailyReward * captureRate),
+      estimatedDailyReward: roundReward(dailyReward * captureRate),
       existingCompetitionScore: 0,
       proposedQuoteScore: 0,
       confidence: "low",
@@ -298,7 +298,7 @@ function estimateReward(
 
   return {
     captureRate: roundRate(captureRate),
-    estimatedDailyReward: round(dailyReward * captureRate),
+    estimatedDailyReward: roundReward(dailyReward * captureRate),
     existingCompetitionScore: round(existingCompetitionScore),
     proposedQuoteScore: round(proposedQuoteScore),
     confidence: book.bids.length >= 10 && book.asks.length >= 10 ? "high" : "medium",
@@ -399,6 +399,11 @@ function round(value: number): number {
 }
 
 function roundRate(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 100_000) / 100_000;
+}
+
+function roundReward(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.round(value * 100_000) / 100_000;
 }

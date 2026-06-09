@@ -166,6 +166,27 @@ describe("market making rewards", () => {
     expect(shallow.rewardEstimate.estimatedDailyReward).toBeGreaterThan(deep.rewardEstimate.estimatedDailyReward);
     expect(deep.rewardEstimate.captureRate).toBeLessThan(shallow.rewardEstimate.captureRate);
   });
+
+  it("preserves small non-zero daily reward estimates", () => {
+    const market = rewardMarket("Will small reward estimate resolve yes?", "asset-small-reward", 1, 3.5);
+    const candidate = scoreMakerCandidates(
+      { ...config, makerMinScore: 0 },
+      [market],
+      { "asset-small-reward": { assetId: "asset-small-reward", bid: 0.49, ask: 0.51, updatedAt: 1 } },
+      {
+        "asset-small-reward": {
+          assetId: "asset-small-reward",
+          bids: [{ price: 0.49, size: 10_000 }],
+          asks: [{ price: 0.51, size: 10_000 }],
+          updatedAt: 1
+        }
+      }
+    )[0];
+
+    expect(candidate.rewardEstimate.captureRate).toBeGreaterThan(0);
+    expect(candidate.rewardEstimate.estimatedDailyReward).toBeGreaterThan(0);
+    expect(candidate.rewardEstimate.estimatedDailyReward).toBeLessThan(0.1);
+  });
 });
 
 function rewardMarket(question: string, asset: string, dailyReward: number, maxSpread: number): RewardMarket {
